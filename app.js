@@ -85,6 +85,21 @@
   function examList() { return store("cet4_exam", []); }
   function addExam(rec) { var l = examList(); l.push(rec); saveStore("cet4_exam", l); }
   function examAvg() { var l = examList(); if (!l.length) return 0; var s = 0; l.forEach(function (x) { s += x.est; }); return Math.round(s / l.length); }
+  function getRecords(kind) { var l = store("cet4_records", []); return kind ? l.filter(function (x) { return x.kind === kind; }) : l; }
+  function saveRecord(kind, title, input, result) {
+    var l = store("cet4_records", []);
+    var sc = parseScore(result, kind);
+    l.push({ id: Date.now(), date: todayKey(), kind: kind, title: title || "", input: input || "", result: result || "", score: sc });
+    saveStore("cet4_records", l);
+  }
+  function parseScore(md, kind) {
+    if (!md) return null;
+    var m;
+    if (kind === "essay") { m = md.match(/(\d{1,3})\s*\/\s*100/); if (m) return Math.min(100, parseInt(m[1], 10)); }
+    if (kind === "translation") { m = md.match(/(\d{1,2}(?:\.\d)?)\s*\/\s*15/); if (m) return Math.min(15, parseFloat(m[1])); }
+    m = md.match(/得分[^\d]{0,6}(\d{1,3})/); if (m) return parseInt(m[1], 10);
+    return null;
+  }
 
   /* ---------- 词书 / 词频 / 难度 ---------- */
   function wmeta(w) { return (window.CET4_WORDMETA || {})[w] || { f5: 0, f10: 0, d: "" }; }
@@ -267,7 +282,7 @@
     { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
     { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
-    { k: "me", t: "我的学习", d: "学习计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "wrong", "qfav"] },
+    { k: "me", t: "我的学习", d: "学习计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav"] },
     { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
   ];
   var MODS = {
@@ -288,6 +303,7 @@
     plan: { t: "学习计划", d: "分阶段计划 · 每日打卡 · AI 调整", ic: "计", c: "#C62828" },
     report: { t: "学习报告", d: "专属报告 · 可保存为图片", ic: "报", c: "#0277BD" },
     dash: { t: "学习仪表盘", d: "做题统计 · 正确率趋势 · 估分", ic: "📊", c: "#0277BD" },
+    records: { t: "作文/翻译记录", d: "历史提交与批改 · 可合成为考试", ic: "档", c: "#8E24AA" },
     wrong: { t: "错题本", d: "自动收集 · 智能复习", ic: "错", c: "#C62828" },
     qfav: { t: "收藏题目", d: "收藏的真题题目", ic: "☆", c: "#6A1B9A" },
     links: { t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" }
@@ -628,7 +644,7 @@
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("wr-result"); res.innerHTML = "";
       gradeEssay(s.prompt, ta.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -668,7 +684,7 @@
       var btn = this, old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("tr-result"); res.innerHTML = "";
       gradeTranslation(s.prompt, s.reference, input.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -964,7 +980,7 @@
       document.getElementById("z-wr-grade").onclick = function () {
         var ta = document.getElementById("z-wr");
         if (ta.value.trim().length < 20) { toast("作文太短"); return; }
-        aiRun(this, document.getElementById("z-wr-res"), function () { return gradeEssay(p.writing.prompt, ta.value.trim()); });
+        aiRun(this, document.getElementById("z-wr-res"), function () { return gradeEssay(p.writing.prompt, ta.value.trim()); }, "essay", p.writing.prompt, ta.value.trim());
       };
     }
     if (showTranslation && p.translation) {
@@ -975,16 +991,16 @@
       document.getElementById("z-tr-grade").onclick = function () {
         var ta = document.getElementById("z-tr");
         if (ta.value.trim().length < 2) { toast("请先写译文"); return; }
-        aiRun(this, document.getElementById("z-tr-res"), function () { return gradeTranslation(p.translation.prompt, p.translation.sample, ta.value.trim()); });
+        aiRun(this, document.getElementById("z-tr-res"), function () { return gradeTranslation(p.translation.prompt, p.translation.sample, ta.value.trim()); }, "translation", p.translation.prompt, ta.value.trim());
       };
     }
   }
 
-  function aiRun(btn, res, fn) {
+  function aiRun(btn, res, fn, kind, title, input) {
     if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
     var old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
     res.innerHTML = "";
-    fn().then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>"; })
+    fn().then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>"; if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); } })
       .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
       .then(function () { btn.disabled = false; btn.textContent = old; });
   }
@@ -1619,6 +1635,50 @@
     main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
   }
 
+  /* ---------- 作文 / 翻译记录 ---------- */
+  function renderRecords() {
+    var recs = getRecords();
+    var essays = recs.filter(function (r) { return r.kind === "essay"; });
+    var trans = recs.filter(function (r) { return r.kind === "translation"; });
+    var html = '<div class="page"><div class="section-title">作文 / 翻译记录（' + essays.length + " 篇作文 · " + trans.length + " 篇翻译）</div>" +
+      '<div class="info">每次在「作文批改 / 翻译练习」或真题写作/翻译提交后，都会自动保存在这里。</div>' +
+      '<button class="btn block" id="rec-compose" style="margin-bottom:12px">把「客观题 + 最近作文/翻译」记为一次考试</button>';
+    if (!recs.length) html += '<div class="info">还没有记录。</div>';
+    recs.slice().reverse().forEach(function (r) {
+      var kn = r.kind === "essay" ? "作文" : (r.kind === "translation" ? "翻译" : "其他");
+      var color = r.kind === "essay" ? "#8E24AA" : "#5E35B1";
+      var sc = r.score != null ? r.score : parseScore(r.result, r.kind);
+      html += '<div class="card"><div class="between"><b style="color:' + color + '">' + kn + " · " + esc(r.date) + "</b>" +
+        "<span>" + (sc != null ? '<b style="color:var(--primary)">' + sc + (r.kind === "essay" ? "/100" : "/15") + "</b>" : '<span class="muted">未解析到分数</span>') +
+        ' <button class="star" data-del="' + r.id + '" style="color:#c62828">×</button></span></div>' +
+        '<div class="muted" style="margin-top:6px">' + esc((r.title || "").slice(0, 70)) + "</div>" +
+        '<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">查看原文与批改</summary>' +
+        '<div class="passage" style="margin-top:8px;white-space:pre-wrap">' + esc(r.input) + "</div>" +
+        '<div class="ai-result" style="margin-top:8px">' + mdToHtml(r.result) + "</div></details></div>";
+    });
+    html += "</div>";
+    main.innerHTML = html;
+    main.querySelectorAll("[data-del]").forEach(function (b) {
+      b.onclick = function () { saveStore("cet4_records", getRecords().filter(function (x) { return String(x.id) !== b.getAttribute("data-del"); })); renderRecords(); };
+    });
+    document.getElementById("rec-compose").onclick = composeFirstExam;
+  }
+  function composeFirstExam() {
+    var p = store("cet4_progress", { a: 0, c: 0, types: {} }), t = p.types || {};
+    var h = (t.listening && t.listening.c) || 0, ht = (t.listening && t.listening.a) || 0;
+    var rc = ((t.cloze && t.cloze.c) || 0) + ((t.match && t.match.c) || 0) + ((t.reading && t.reading.c) || 0);
+    var rt = ((t.cloze && t.cloze.a) || 0) + ((t.match && t.match.a) || 0) + ((t.reading && t.reading.a) || 0);
+    var essays = getRecords("essay"), trans = getRecords("translation");
+    var e = essays.length ? essays[essays.length - 1] : null, tr = trans.length ? trans[trans.length - 1] : null;
+    var wRaw = 0, hasW = false;
+    if (e) { var es = e.score != null ? e.score : parseScore(e.result, "essay"); if (es != null) { wRaw += es / 100 * 15; hasW = true; } }
+    if (tr) { var ts = tr.score != null ? tr.score : parseScore(tr.result, "translation"); if (ts != null) { wRaw += ts; hasW = true; } }
+    var w = hasW ? Math.round(wRaw * 10) / 10 : null;
+    addExam({ date: todayKey(), source: "考试（客观题+作文/翻译）", h: h, ht: ht || 25, r: rc, rt: rt || 30, w: w, wt: 30, est: examEst(h, ht || 25, rc, rt || 30, w, 30), writingEstimated: !hasW });
+    toast("已记为一次考试：" + examEst(h, ht || 25, rc, rt || 30, w, 30) + " / 710");
+    openView("dash");
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -1671,6 +1731,7 @@
     else if (name === "collocations") renderCollocations();
     else if (name === "mocks") renderMockList();
     else if (name === "dash") renderDashboard();
+    else if (name === "records") renderRecords();
     else if (name === "wrong") renderWrongBook();
     else if (name === "fav") renderFavList();
     else if (name === "qfav") renderQFav();
