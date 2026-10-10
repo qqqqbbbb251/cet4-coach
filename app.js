@@ -51,7 +51,27 @@
     });
     return e;
   }
-  var READ_LABEL = { cloze: "选词填空", matching: "段落匹配", reading: "阅读理解" };  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  var READ_LABEL = { cloze: "选词填空", matching: "段落匹配", reading: "阅读理解" };
+
+  /* ---------- store / progress / wrong / fav / theme ---------- */
+  function store(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
+  function saveStore(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+  function todayKey() { var n = new Date(); return n.getFullYear() + "-" + ("0" + (n.getMonth() + 1)).slice(-2) + "-" + ("0" + n.getDate()).slice(-2); }
+  function recordAnswer(type, correct) {
+    var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
+    p.a++; if (correct) p.c++;
+    var d = todayKey(); p.days[d] = p.days[d] || { a: 0, c: 0 }; p.days[d].a++; if (correct) p.days[d].c++;
+    p.types[type] = p.types[type] || { a: 0, c: 0 }; p.types[type].a++; if (correct) p.types[type].c++;
+    saveStore("cet4_progress", p);
+  }
+  function addWrong(q) { var w = store("cet4_wrong", {}); w[q.key] = q; saveStore("cet4_wrong", w); }
+  function removeWrong(k) { var w = store("cet4_wrong", {}); delete w[k]; saveStore("cet4_wrong", w); }
+  function getFav() { return store("cet4_fav", {}); }
+  function toggleFav(word, meaning) { var f = getFav(); if (f[word] != null) { delete f[word]; saveStore("cet4_fav", f); return false; } f[word] = meaning; saveStore("cet4_fav", f); return true; }
+  function applyTheme() { document.body.classList.toggle("dark", store("cet4_theme", "light") === "dark"); }
+  function toggleTheme() { var t = store("cet4_theme", "light"); saveStore("cet4_theme", t === "dark" ? "light" : "dark"); applyTheme(); }
+  function A2I(a) { return a ? String(a).toUpperCase().charCodeAt(0) - 65 : -1; }
+  function stripA(o) { return String(o).replace(/^[A-Za-z]\)\s*/, ""); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -189,7 +209,10 @@
       { key: "translation", t: "翻译练习", d: "12 篇汉译英 · AI 批改与参考译文", ic: "译", c: "#5E35B1" },
       { key: "grammar", t: "语法要点", d: "15 个核心语法专题 · 清单式复习", ic: "法", c: "#2E7D32" },
       { key: "collocations", t: "常用短语", d: "126 个高频搭配 · 例句 + 记忆提示", ic: "搭", c: "#00838F" },
-      { key: "mocks", t: "全真模拟", d: "10 套完整模拟卷 · 听力/阅读/翻译/写作", ic: "卷", c: "#C62828" }
+      { key: "mocks", t: "全真模拟", d: "10 套完整模拟卷 · 听力/阅读/翻译/写作", ic: "卷", c: "#C62828" },
+      { key: "dash", t: "学习仪表盘", d: "做题统计 · 正确率趋势 · 参考估分", ic: "📊", c: "#0277BD" },
+      { key: "wrong", t: "错题本", d: "自动收集错题 · 智能复习 · 连对出库", ic: "错", c: "#C62828" },
+      { key: "fav", t: "生词本", d: "收藏的重点词汇", ic: "★", c: "#C8860A" }
     ];
     var html = '<div class="page">';
     html += '<div class="hero"><h1>大学英语四级 · 备考</h1><p>单词 · 阅读 · 听力 · 作文 · 翻译，一站式备考。</p>' +
@@ -223,6 +246,34 @@
       el.onclick = function () { onClick(items[parseInt(el.getAttribute("data-idx"), 10)]); };
     });
   }
+  function listPageInto(container, items, renderRow, onClick) {
+    container.innerHTML = '<div class="section-title">共 ' + items.length + " 套</div>" + items.map(renderRow).join("");
+    container.querySelectorAll("[data-idx]").forEach(function (el) {
+      el.onclick = function () { onClick(items[parseInt(el.getAttribute("data-idx"), 10)]); };
+    });
+  }
+  function moduleView(o) {
+    var z = ZHENTI.filter(function (p) {
+      if (o.zType === "listening") return p.questions.some(function (q) { return q.type === "listening"; });
+      if (o.zType === "reading") return p.questions.some(function (q) { return q.type === "reading"; });
+      if (o.zType === "writing") return !!p.writing;
+      if (o.zType === "translation") return !!p.translation;
+      return false;
+    }).sort(function (a, b) { return b.id.localeCompare(a.id); });
+    main.innerHTML = '<div class="page"><div class="tabs" id="mTabs"><button data-v="sim" class="active">模拟练习（' + o.simItems.length + '）</button><button data-v="real">历年真题（' + z.length + '）</button></div><div id="mBody"></div></div>';
+    var body = document.getElementById("mBody");
+    function zRow(p, i) {
+      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#B71C1C1f;color:#B71C1C">卷</div>' +
+        '<div><h3>' + esc(p.source) + "</h3><p>含" + o.zLabel + " · 点击作答</p></div>" +
+        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+    }
+    function drawSim() { listPageInto(body, o.simItems, o.simRow, o.simOpen); }
+    function drawReal() { listPageInto(body, z, zRow, function (p) { renderZhentiDetail(p, o.zFocus); }); }
+    document.getElementById("mTabs").querySelectorAll("button").forEach(function (b) {
+      b.onclick = function () { setTab(b); (b.getAttribute("data-v") === "sim" ? drawSim : drawReal)(); };
+    });
+    drawSim();
+  }
 
   /* ---------- vocab ---------- */
   function renderVocab() {
@@ -243,7 +294,7 @@
       var w = words[idx];
       body.innerHTML =
         '<div class="progress"><i style="width:' + ((idx + 1) / words.length * 100).toFixed(1) + '%"></i></div>' +
-        '<p class="center muted">' + (idx + 1) + " / " + words.length + "</p>" +
+        '<div class="between" style="margin:6px 0"><span class="muted">' + (idx + 1) + " / " + words.length + '</span><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></div>' +
         '<div class="flash" id="flash-card"><div class="word">' + esc(w.w) + "</div>" +
         (w.p ? '<div class="phon">/' + esc(w.p) + "/</div>" : "") +
         (revealed ? '<div class="mean">' + esc(w.m) + "</div>" : '<div class="hint">点击卡片显示释义</div>') + "</div>" +
@@ -251,6 +302,7 @@
         '<button class="btn ghost" id="prev" style="flex:1">上一个</button>' +
         '<button class="btn ghost" id="rnd" style="flex:1">随机</button>' +
         '<button class="btn ghost" id="next" style="flex:1">下一个</button></div>';
+      document.getElementById("fav-btn").onclick = function () { var on = toggleFav(w.w, w.m); this.classList.toggle("on", on); toast(on ? "已收藏" : "已取消收藏"); };
       document.getElementById("flash-card").onclick = function () { revealed = !revealed; draw(); };
       document.getElementById("prev").onclick = function () { idx = (idx - 1 + words.length) % words.length; revealed = false; draw(); };
       document.getElementById("next").onclick = function () { idx = (idx + 1) % words.length; revealed = false; draw(); };
@@ -299,12 +351,16 @@
     function draw(q) {
       q = (q || "").trim().toLowerCase();
       var items = q ? list.filter(function (v) { return v.word.toLowerCase().indexOf(q) >= 0 || (v.meaningZh || "").indexOf(q) >= 0; }) : list;
+      var fav = getFav();
       box.innerHTML = '<p class="muted" style="margin:10px 0">共 ' + items.length + " 个</p>" + items.map(function (v) {
         return '<div class="card"><div class="between"><b style="font-size:18px;color:var(--primary)">' + esc(v.word) + " <span class='muted' style='font-weight:400'>" + esc(v.phonetic || "") + "</span></b>" +
-          '<span class="muted">' + esc(v.partOfSpeech || "") + "</span></div>" +
+          '<button class="star' + (fav[v.word] != null ? " on" : "") + '" data-fav="' + esc(v.word) + '" data-m="' + esc(v.meaningZh || "") + '">★</button></div>' +
           '<div style="margin-top:6px">' + esc(v.meaningZh || "") + "</div>" +
           (v.example ? '<div class="muted" style="margin-top:8px">例：' + esc(v.example) + "</div>" : "") + "</div>";
       }).join("");
+      box.querySelectorAll(".star").forEach(function (b) {
+        b.onclick = function () { var on = toggleFav(b.getAttribute("data-fav"), b.getAttribute("data-m")); b.classList.toggle("on", on); toast(on ? "已收藏到生词本" : "已取消收藏"); };
+      });
     }
     document.getElementById("vip-search").oninput = function () { draw(this.value); };
     draw("");
@@ -312,11 +368,15 @@
 
   /* ---------- reading ---------- */
   function renderReadingList() {
-    listPage("阅读 · 完形（" + DATA.reading.length + " 篇）", DATA.reading, function (s, i) {
-      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#00897B1f;color:#00897B">阅</div>' +
-        '<div><h3>' + esc(s.theme) + '</h3><p>' + (READ_LABEL[s.type] || s.type) + " · " + s.questions.length + " 题</p></div>" +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
-    }, renderReadingDetail);
+    moduleView({
+      simItems: DATA.reading,
+      simRow: function (s, i) {
+        return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#00897B1f;color:#00897B">阅</div>' +
+          '<div><h3>' + esc(s.theme) + '</h3><p>' + (READ_LABEL[s.type] || s.type) + " · " + s.questions.length + " 题</p></div>" +
+          '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+      },
+      simOpen: renderReadingDetail, zType: "reading", zFocus: "reading", zLabel: "选词/匹配/阅读"
+    });
   }
   function renderReadingDetail(s) {
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(s.theme) + "（" + (READ_LABEL[s.type] || s.type) + "）</div>" +
@@ -328,11 +388,15 @@
 
   /* ---------- listening ---------- */
   function renderListeningList() {
-    listPage("听力（" + DATA.listening.length + " 套）", DATA.listening, function (s, i) {
-      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#F4511E1f;color:#F4511E">听</div>' +
-        '<div><h3>' + esc(s.theme) + '</h3><p>' + (LISTEN_LABEL[s.type] || s.type) + " · " + s.questions.length + " 题</p></div>" +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
-    }, renderListeningDetail);
+    moduleView({
+      simItems: DATA.listening,
+      simRow: function (s, i) {
+        return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#F4511E1f;color:#F4511E">听</div>' +
+          '<div><h3>' + esc(s.theme) + '</h3><p>' + (LISTEN_LABEL[s.type] || s.type) + " · " + s.questions.length + " 题</p></div>" +
+          '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+      },
+      simOpen: renderListeningDetail, zType: "listening", zFocus: "listening", zLabel: "听力"
+    });
   }
   function renderListeningDetail(s) {
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(s.theme) + "（" + (LISTEN_LABEL[s.type] || s.type) + "）</div>" +
@@ -351,11 +415,15 @@
 
   /* ---------- writing ---------- */
   function renderWritingList() {
-    listPage("作文（" + DATA.writing.length + " 题）", DATA.writing, function (s, i) {
-      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#8E24AA1f;color:#8E24AA">文</div>' +
-        '<div><h3>' + esc(s.topic) + "</h3><p>" + esc((s.prompt || "").slice(0, 46)) + "…</p></div>" +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
-    }, renderWritingDetail);
+    moduleView({
+      simItems: DATA.writing,
+      simRow: function (s, i) {
+        return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#8E24AA1f;color:#8E24AA">文</div>' +
+          '<div><h3>' + esc(s.topic) + "</h3><p>" + esc((s.prompt || "").slice(0, 46)) + "…</p></div>" +
+          '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+      },
+      simOpen: renderWritingDetail, zType: "writing", zFocus: "writing", zLabel: "写作"
+    });
   }
   function renderWritingDetail(s) {
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(s.topic) + "</div>" +
@@ -391,11 +459,15 @@
 
   /* ---------- translation ---------- */
   function renderTranslationList() {
-    listPage("翻译（" + DATA.translations.length + " 篇）", DATA.translations, function (s, i) {
-      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#5E35B11f;color:#5E35B1">译</div>' +
-        '<div><h3>' + esc(s.theme) + "</h3><p>" + esc((s.prompt || "").slice(0, 46)) + "…</p></div>" +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
-    }, renderTranslationDetail);
+    moduleView({
+      simItems: DATA.translations,
+      simRow: function (s, i) {
+        return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#5E35B11f;color:#5E35B1">译</div>' +
+          '<div><h3>' + esc(s.theme) + "</h3><p>" + esc((s.prompt || "").slice(0, 46)) + "…</p></div>" +
+          '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+      },
+      simOpen: renderTranslationDetail, zType: "translation", zFocus: "translation", zLabel: "翻译"
+    });
   }
   function renderTranslationDetail(s) {
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">翻译 · ' + esc(s.theme) + "</div>" +
@@ -510,7 +582,12 @@
     }, renderZhentiDetail);
   }
 
-  function renderZhentiDetail(p) {
+  function renderZhentiDetail(p, focus) {
+    focus = focus || "";
+    var showWriting = !focus || focus === "writing";
+    var showListening = !focus || focus === "listening";
+    var showReading = !focus || focus === "reading";
+    var showTranslation = !focus || focus === "translation";
     function l2i(a) { return a ? a.toUpperCase().charCodeAt(0) - 65 : -1; }
     function strip(o) { return String(o).replace(/^[A-Za-z]\)\s*/, ""); }
     var listening = p.questions.filter(function (q) { return q.type === "listening"; });
@@ -521,7 +598,8 @@
     var labels = (p.matchParagraphs || []).map(function (x) { return x.label; });
 
     function mcq(q) {
-      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(q.stem) + "</div>";
+      var opts = (q.options || []).map(strip);
+      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(q.stem || "") + '" data-opts="' + esc(JSON.stringify(opts)) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(q.stem) + "</div>";
       (q.options || []).forEach(function (o, oi) {
         h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(strip(o)) + "</span></div>";
       });
@@ -529,7 +607,7 @@
     }
     function selQ(q, opts, isCloze) {
       var stem = isCloze ? ("第 " + q.qno + " 空") : q.stem;
-      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(stem) + "</div>";
+      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(stem || "") + '" data-opts="' + esc(JSON.stringify(opts.map(function (x) { return x.t; }))) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(stem) + "</div>";
       h += '<select class="z-sel"><option value="">— 选择 —</option>';
       opts.forEach(function (o) { h += '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; });
       return h + "</select></div>";
@@ -537,33 +615,33 @@
 
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(p.source) + "</div>";
 
-    if (p.writing) {
+    if (showWriting && p.writing) {
       html += '<div class="card"><h2>Part I　写作</h2><div class="passage">' + esc(p.writing.prompt) + "</div>" +
         '<textarea id="z-wr" rows="6" placeholder="在此写作文（至少 120 词）…"></textarea>' +
         '<div class="row" style="margin-top:10px"><button class="btn" id="z-wr-grade">AI 批改作文</button><button class="btn ghost" id="z-wr-sample">参考范文</button></div>' +
         '<div id="z-wr-samplebox" style="display:none;margin-top:10px"></div><div id="z-wr-res"></div></div>';
     }
-    if (listening.length) {
+    if (showListening && listening.length) {
       html += '<div class="card section-card"><h2>Part II　听力（' + listening.length + ' 题）</h2>';
       if (p.listeningUrl) html += '<div class="info">🎧 在线收听本套听力（含时间轴）：<a href="' + esc(p.listeningUrl) + '" target="_blank" rel="noopener">点击打开</a></div>';
       listening.forEach(function (q) { html += mcq(q); });
       html += "</div>";
     }
-    if (cloze.length) {
+    if (showReading && cloze.length) {
       html += '<div class="card section-card"><h2>Part III-A　选词填空</h2><div class="passage">' + esc(p.clozePassage) + "</div>" +
         '<div class="info">词库：' + bank.map(function (o) { return esc(o); }).join("　") + "</div>";
       var bankOpts = bank.map(function (o) { return { v: o.charAt(0).toUpperCase(), t: o }; });
       cloze.forEach(function (q) { html += selQ(q, bankOpts, true); });
       html += "</div>";
     }
-    if (match.length) {
+    if (showReading && match.length) {
       html += '<div class="card section-card"><h2>Part III-B　信息匹配</h2><div class="stem" style="font-weight:600;margin-bottom:6px">' + esc(p.matchIntro || "") + "</div>";
       (p.matchParagraphs || []).forEach(function (x) { html += '<div class="passage" style="margin:8px 0"><b>' + esc(x.label) + ") </b>" + esc(x.text) + "</div>"; });
       var labelOpts = labels.map(function (l) { return { v: l, t: l }; });
       match.forEach(function (q) { html += selQ(q, labelOpts, false); });
       html += "</div>";
     }
-    if (reading.length) {
+    if (showReading && reading.length) {
       html += '<div class="card section-card"><h2>Part III-C　仔细阅读</h2>';
       reading.forEach(function (q) {
         var pas = (p.readingPassages || {})[String(q.qno)];
@@ -572,18 +650,19 @@
       });
       html += "</div>";
     }
-    if (p.translation) {
+    if (showTranslation && p.translation) {
       html += '<div class="card"><h2>Part IV　翻译</h2><div class="passage">' + esc(p.translation.prompt) + "</div>" +
         '<textarea id="z-tr" rows="4" placeholder="在此写译文…"></textarea>' +
         '<div class="row" style="margin-top:10px"><button class="btn" id="z-tr-grade">AI 批改翻译</button><button class="btn ghost" id="z-tr-sample">参考译文</button></div>' +
         '<div id="z-tr-samplebox" style="display:none;margin-top:10px"></div><div id="z-tr-res"></div></div>';
     }
-    if (listening.length || cloze.length || match.length || reading.length) {
+    if ((showListening && listening.length) || (showReading && (cloze.length || match.length || reading.length))) {
       html += '<div class="card"><button class="btn block submit-btn">提交客观题批改</button><div id="z-score"></div></div>';
     }
     html += "</div>";
     main.innerHTML = html;
-    document.getElementById("backslot").appendChild(backBar("返回", renderZhentiList));
+    var backTarget = focus === "listening" ? renderListeningList : focus === "reading" ? renderReadingList : focus === "translation" ? renderTranslationList : focus === "writing" ? renderWritingList : renderZhentiList;
+    document.getElementById("backslot").appendChild(backBar("返回", backTarget));
 
     main.querySelectorAll(".zq[data-kind=mcq] .opt").forEach(function (el) {
       el.onclick = function () {
@@ -616,6 +695,19 @@
           s.classList.add("locked");
         }
         if (ok) correct++;
+        var answered = q.querySelector(".opt.sel") || (q.querySelector(".z-sel") && q.querySelector(".z-sel").value);
+        if (answered) {
+          recordAnswer(q.getAttribute("data-type") || "obj", ok);
+          if (!ok) {
+            addWrong({
+              key: (p.id || "") + "#" + q.getAttribute("data-qno"),
+              paper: p.source, qno: q.getAttribute("data-qno"), type: q.getAttribute("data-type"),
+              stem: q.getAttribute("data-stem"), options: JSON.parse(q.getAttribute("data-opts") || "[]"),
+              answer: q.getAttribute("data-ansl") || q.getAttribute("data-ans"),
+              exp: q.getAttribute("data-exp"), kw: JSON.parse(q.getAttribute("data-kw") || "[]")
+            });
+          }
+        }
         var exp = q.getAttribute("data-exp");
         if (exp) {
           var kw = [];
@@ -658,7 +750,7 @@
       submit.textContent = "重做";
     };
 
-    if (p.writing) {
+    if (showWriting && p.writing) {
       document.getElementById("z-wr-sample").onclick = function () {
         var b = document.getElementById("z-wr-samplebox"); var show = b.style.display === "none";
         b.style.display = show ? "block" : "none"; b.innerHTML = '<div class="ai-result">' + esc(p.writing.sample || "").replace(/\n/g, "<br>") + "</div>";
@@ -669,7 +761,7 @@
         aiRun(this, document.getElementById("z-wr-res"), function () { return gradeEssay(p.writing.prompt, ta.value.trim()); });
       };
     }
-    if (p.translation) {
+    if (showTranslation && p.translation) {
       document.getElementById("z-tr-sample").onclick = function () {
         var b = document.getElementById("z-tr-samplebox"); var show = b.style.display === "none";
         b.style.display = show ? "block" : "none"; b.innerHTML = '<div class="info">' + esc(p.translation.sample || "") + "</div>";
@@ -817,6 +909,133 @@
     });
   }
 
+  /* ---------- 仪表盘 ---------- */
+  function renderDashboard() {
+    var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
+    var acc = p.a ? Math.round(p.c / p.a * 100) : 0;
+    var est = p.a ? Math.min(710, Math.round(p.c / p.a * 497 + 128)) : 0;
+    var days = [];
+    for (var i = 6; i >= 0; i--) {
+      var d = new Date(); d.setDate(d.getDate() - i);
+      var k = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+      days.push({ k: k.slice(5), v: p.days[k] || { a: 0, c: 0 } });
+    }
+    var maxa = Math.max(1, Math.max.apply(null, days.map(function (x) { return x.v.a; })));
+    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", obj: "练习" };
+    var wrongN = Object.keys(store("cet4_wrong", {})).length;
+    var favN = Object.keys(getFav()).length;
+
+    var html = '<div class="page"><div class="section-title">学习仪表盘</div>' +
+      '<div class="stat-row">' +
+      '<div class="stat"><div class="n">' + p.a + '</div><div class="l">已做题数</div></div>' +
+      '<div class="stat"><div class="n">' + p.c + '</div><div class="l">答对</div></div>' +
+      '<div class="stat"><div class="n">' + acc + '%</div><div class="l">正确率</div></div>' +
+      '<div class="stat"><div class="n">' + (est || "—") + '</div><div class="l">参考估分 /710</div></div>' +
+      '</div>' +
+      '<div class="card"><div class="section-title" style="margin-top:0">近 7 天做题量</div><div class="bars">';
+    days.forEach(function (x) {
+      var h = Math.round(x.v.a / maxa * 100);
+      html += '<div class="bb"><div class="b" style="height:' + h + '%"></div><div class="d">' + x.k + "</div></div>";
+    });
+    html += "</div></div>";
+    var types = p.types || {};
+    var tkeys = Object.keys(types).filter(function (k) { return types[k].a > 0; });
+    if (tkeys.length) {
+      html += '<div class="card"><div class="section-title" style="margin-top:0">分题型正确率</div>';
+      tkeys.forEach(function (k) {
+        var a = types[k].a, c = types[k].c, r = Math.round(c / a * 100);
+        html += '<div class="between" style="margin:6px 0"><span>' + (typeNames[k] || k) + '</span><span class="muted">' + c + "/" + a + " · " + r + '%</span></div><div class="progress"><i style="width:' + r + '%"></i></div>';
+      });
+      html += "</div>";
+    }
+    html += '<div class="grid">' +
+      '<div class="fcard" data-go="wrong"><div class="ic" style="background:#C628281f;color:#C62828">错</div><div class="txt"><h3>错题本</h3><p>' + wrongN + " 道错题 · 智能复习</p></div><div class=\"arrow\">›</div></div>" +
+      '<div class="fcard" data-go="fav"><div class="ic" style="background:#F6B93B1f;color:#C8860A">★</div><div class="txt"><h3>生词本</h3><p>' + favN + ' 个收藏单词</p></div><div class="arrow">›</div></div>' +
+      "</div>" +
+      '<p class="center muted" style="margin-top:16px">估分按客观题正确率粗略折算，仅供参考。</p></div>';
+    main.innerHTML = html;
+    main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
+  }
+
+  /* ---------- 错题本 ---------- */
+  function renderWrongBook() {
+    var w = store("cet4_wrong", {});
+    var items = Object.keys(w).map(function (k) { return w[k]; });
+    var html = '<div class="page"><div class="section-title">错题本（' + items.length + '）</div>';
+    if (!items.length) {
+      html += '<div class="info">还没有错题。做真题/练习答错时，会自动收进这里。</div>';
+    } else {
+      html += '<div class="row" style="margin-bottom:12px"><button class="btn" id="wq-review">智能复习（最多20题）</button><button class="btn ghost" id="wq-clear">清空</button></div>';
+      items.forEach(function (q) {
+        html += '<div class="wrong-item"><div class="stem">' + esc(q.paper || "") + " · 第" + esc(q.qno) + '题</div>' +
+          '<div style="margin:6px 0">' + esc(q.stem || "") + "</div>" +
+          (q.options || []).map(function (o) { return '<div class="muted">' + esc(o) + "</div>"; }).join("") +
+          '<div style="margin-top:6px">正确答案：<b>' + esc(q.answer) + "</b></div>" +
+          (q.exp ? '<div class="explain">解析：' + hiExp(q.exp, q.kw || []) + "</div>" : "") + "</div>";
+      });
+    }
+    html += "</div>";
+    main.innerHTML = html;
+    if (items.length) {
+      document.getElementById("wq-review").onclick = renderWrongQuiz;
+      document.getElementById("wq-clear").onclick = function () { saveStore("cet4_wrong", {}); renderWrongBook(); };
+    }
+  }
+
+  function renderWrongQuiz() {
+    var w = store("cet4_wrong", {});
+    var items = Object.keys(w).map(function (k) { return w[k]; });
+    if (!items.length) { toast("错题本是空的"); return; }
+    items = shuffle(items).slice(0, 20);
+    var html = '<div class="page"><div id="backslot"></div><div class="section-title">智能复习（' + items.length + ' 题）</div><div class="card section-card">';
+    items.forEach(function (q, i) {
+      html += '<div class="zq" data-kind="mcq" data-ans="' + A2I(q.answer) + '" data-key="' + esc(q.key) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + (i + 1) + ". " + esc(q.stem || ("第" + q.qno + "题")) + "</div>";
+      (q.options || []).forEach(function (o, oi) {
+        html += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(stripA(o)) + "</span></div>";
+      });
+      html += "</div>";
+    });
+    html += '<button class="btn block submit-btn">提交</button></div></div>';
+    main.innerHTML = html;
+    document.getElementById("backslot").appendChild(backBar("返回", renderWrongBook));
+    var submitted = false;
+    main.querySelectorAll(".opt").forEach(function (el) {
+      el.onclick = function () { if (submitted) return; var q = el.closest(".zq"); q.querySelectorAll(".opt").forEach(function (x) { x.classList.remove("sel"); }); el.classList.add("sel"); };
+    });
+    main.querySelector(".submit-btn").onclick = function () {
+      if (submitted) return;
+      submitted = true;
+      var c = 0, t = 0;
+      main.querySelectorAll(".zq").forEach(function (q) {
+        t++;
+        var ans = parseInt(q.getAttribute("data-ans"), 10), sel = q.querySelector(".opt.sel"), ok = false;
+        q.querySelectorAll(".opt").forEach(function (o) { o.classList.add("locked"); var oi = parseInt(o.getAttribute("data-oi"), 10); if (oi === ans) o.classList.add("correct"); else if (sel && o === sel) o.classList.add("wrong"); });
+        ok = sel && parseInt(sel.getAttribute("data-oi"), 10) === ans;
+        if (ok) { c++; removeWrong(q.getAttribute("data-key")); }
+        recordAnswer("review", ok);
+        var exp = q.getAttribute("data-exp");
+        if (exp) { var kw = []; try { kw = JSON.parse(q.getAttribute("data-kw") || "[]"); } catch (e) { } var d = document.createElement("div"); d.className = "explain"; d.innerHTML = "<b>解析：</b>" + hiExp(exp, kw); q.appendChild(d); }
+      });
+      toast("答对 " + c + " / " + t + "，答对的已移出错题本");
+      this.textContent = "完成";
+      this.disabled = true;
+    };
+  }
+
+  /* ---------- 生词本 ---------- */
+  function renderFavList() {
+    var f = getFav();
+    var words = Object.keys(f);
+    var html = '<div class="page"><div class="section-title">生词本（' + words.length + '）</div>';
+    if (!words.length) { html += '<div class="info">还没有收藏单词。在「单词检测 → 重点词汇」或单词卡里点 ★ 收藏。</div>'; }
+    words.forEach(function (w) {
+      html += '<div class="card"><div class="between"><b style="font-size:17px;color:var(--primary)">' + esc(w) + '</b><button class="star on" data-rm="' + esc(w) + '">★</button></div><div style="margin-top:6px">' + esc(f[w]) + "</div></div>";
+    });
+    html += "</div>";
+    main.innerHTML = html;
+    main.querySelectorAll("[data-rm]").forEach(function (b) { b.onclick = function () { toggleFav(b.getAttribute("data-rm")); renderFavList(); }; });
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -868,8 +1087,14 @@
     else if (name === "grammar") renderGrammarList();
     else if (name === "collocations") renderCollocations();
     else if (name === "mocks") renderMockList();
+    else if (name === "dash") renderDashboard();
+    else if (name === "wrong") renderWrongBook();
+    else if (name === "fav") renderFavList();
   }
   document.getElementById("btn-home").onclick = function () { openView("home"); };
   document.getElementById("btn-settings").onclick = openSettings;
+  var _dash = document.getElementById("btn-dash"); if (_dash) _dash.onclick = function () { openView("dash"); };
+  var _theme = document.getElementById("btn-theme"); if (_theme) _theme.onclick = toggleTheme;
+  applyTheme();
   openView("home");
 })();
