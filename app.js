@@ -71,6 +71,7 @@
   function getQFav() { return store("cet4_qfav", {}); }
   function toggleQFav(rec) { var f = getQFav(); if (f[rec.key]) { delete f[rec.key]; saveStore("cet4_qfav", f); return false; } f[rec.key] = rec; saveStore("cet4_qfav", f); return true; }
   function qfavStar(id) { var on = getQFav()[id]; return '<button class="star qfav' + (on ? " on" : "") + '" data-qk="' + esc(id) + '" title="收藏题目">' + (on ? "★" : "☆") + "</button>"; }
+  function diffBadge(d) { if (!d) return ""; var c = { "基础": "#2E7D32", "中级": "#0277BD", "较难": "#EF6C00", "高阶": "#C62828" }[d] || "#607D8B"; return '<span style="font-size:11px;color:#fff;background:' + c + ';border-radius:8px;padding:1px 7px;margin-right:6px">' + d + "</span>"; }
   function applyTheme() { document.body.classList.toggle("dark", store("cet4_theme", "light") === "dark"); }
   function toggleTheme() { var t = store("cet4_theme", "light"); saveStore("cet4_theme", t === "dark" ? "light" : "dark"); applyTheme(); }
   function A2I(a) { return a ? String(a).toUpperCase().charCodeAt(0) - 65 : -1; }
@@ -151,7 +152,7 @@
   /* ---------- objective questions ---------- */
   function questionHTML(q, qi) {
     var h = '<div class="q" data-qi="' + qi + '" data-answer="' + q.answer + '" data-explain="' + esc(q.explanation || "") + '">' +
-      '<div class="stem">' + (qi + 1) + ". " + esc(q.stem) + "</div>";
+      '<div class="stem">' + diffBadge(q.diff) + (qi + 1) + ". " + esc(q.stem) + "</div>";
     q.options.forEach(function (o, oi) {
       h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + ".</span><span>" + esc(o) + "</span></div>";
     });
@@ -210,7 +211,7 @@
   }
 
   /* ---------- home ---------- */
-  function renderHome() {
+  function renderHomeOld() {
     var ok = configured();
     var cards = [
       { key: "zhenti", t: "历年真题", d: "76 套真题（2015–2026）· 3325 题 · 含答案解析，自动判分", ic: "卷", c: "#B71C1C" },
@@ -252,6 +253,62 @@
     main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
   }
 
+  var CATS = [
+    { k: "words", t: "背单词", d: "单词卡 · 中译英 · 拼写 · 词书 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "roots", "fav"] },
+    { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
+    { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "grammar", "collocations"] },
+    { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
+    { k: "me", t: "我的学习", d: "学习计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "wrong", "qfav"] },
+    { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
+  ];
+  var MODS = {
+    vocab: { t: "单词检测", d: "单词卡 · 中译英 · 拼写 · 词书 · 重点词 · 生词本", ic: "Aa", c: "#3949AB" },
+    roots: { t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测", ic: "根", c: "#00838F" },
+    fav: { t: "生词本", d: "收藏的重点词汇", ic: "★", c: "#C8860A" },
+    zhenti: { t: "历年真题", d: "76 套（2015–2026）· 3325 题 · 含答案解析", ic: "卷", c: "#B71C1C" },
+    eztor: { t: "原创模拟", d: "2 套原创模拟卷 · 55 题含答案解析", ic: "拟", c: "#6A1B9A" },
+    yati: { t: "押题卷", d: "11 套押题/模拟卷 · 试卷 PDF + 听力音频", ic: "押", c: "#AD1457" },
+    mocks: { t: "全真模拟", d: "10 套完整模拟卷 · 听力/阅读/翻译/写作", ic: "模", c: "#C62828" },
+    listening: { t: "听力练习", d: "24 套 · 音频 + 原文 + 自动批改", ic: "听", c: "#F4511E" },
+    reading: { t: "阅读完形", d: "30 篇 300 题 · 自动批改", ic: "阅", c: "#00897B" },
+    translation: { t: "翻译练习", d: "12 篇汉译英 · AI 批改", ic: "译", c: "#5E35B1" },
+    writing: { t: "作文批改", d: "12 道题 · AI 评分与范文", ic: "文", c: "#8E24AA" },
+    grammar: { t: "语法要点", d: "15 个核心语法专题", ic: "法", c: "#2E7D32" },
+    collocations: { t: "常用短语", d: "126 个高频搭配", ic: "搭", c: "#00838F" },
+    ocr: { t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 建议", ic: "拍", c: "#D81B60" },
+    plan: { t: "学习计划", d: "分阶段计划 · 每日打卡 · AI 调整", ic: "计", c: "#C62828" },
+    report: { t: "学习报告", d: "专属报告 · 可保存为图片", ic: "报", c: "#0277BD" },
+    dash: { t: "学习仪表盘", d: "做题统计 · 正确率趋势 · 估分", ic: "📊", c: "#0277BD" },
+    wrong: { t: "错题本", d: "自动收集 · 智能复习", ic: "错", c: "#C62828" },
+    qfav: { t: "收藏题目", d: "收藏的真题题目", ic: "☆", c: "#6A1B9A" },
+    links: { t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" }
+  };
+  function renderHome() {
+    var ok = configured();
+    var html = '<div class="page">' +
+      '<div class="hero"><h1>大学英语四级 · 备考</h1><p>单词 · 真题模考 · 专项练习 · AI 批改，一站式备考。</p><span class="pill">' + (ok ? "● AI 批改已就绪" : "○ AI 批改未配置") + "</span></div>";
+    if (!ok) html += '<div class="info warn">点右上角 ⚙ 填入 DeepSeek API Key，即可用作文/翻译批改、拍照识别与 AI 计划；其余功能可离线使用。</div>';
+    html += '<div class="grid">';
+    CATS.forEach(function (c) {
+      html += '<div class="fcard" data-cat="' + c.k + '"><div class="ic" style="background:' + c.c + '1f;color:' + c.c + '">' + c.ic + '</div><div class="txt"><h3>' + c.t + '</h3><p>' + c.d + '</p></div><div class="arrow">›</div></div>';
+    });
+    html += '</div><p class="center muted" style="margin-top:24px">个人专属备考工具 · 数据来源：GitHub 开源</p></div>';
+    main.innerHTML = html;
+    main.querySelectorAll("[data-cat]").forEach(function (el) { el.onclick = function () { renderCategory(el.getAttribute("data-cat")); }; });
+  }
+  function renderCategory(k) {
+    var cat = CATS.filter(function (c) { return c.k === k; })[0];
+    if (!cat) { renderHome(); return; }
+    var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(cat.t) + '</div><div class="grid">';
+    cat.mods.forEach(function (m) {
+      var x = MODS[m]; if (!x) return;
+      html += '<div class="fcard" data-go="' + m + '"><div class="ic" style="background:' + x.c + '1f;color:' + x.c + '">' + x.ic + '</div><div class="txt"><h3>' + x.t + '</h3><p>' + x.d + '</p></div><div class="arrow">›</div></div>';
+    });
+    html += "</div></div>";
+    main.innerHTML = html;
+    document.getElementById("backslot").appendChild(backBar("返回", renderHome));
+    main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
+  }
   function backBar(label, fn) {
     var b = document.createElement("button");
     b.className = "btn ghost small"; b.textContent = "‹ " + (label || "返回");
@@ -300,11 +357,15 @@
     main.innerHTML = '<div class="page"><div class="tabs">' +
       '<button id="tab-card" class="active">单词卡</button>' +
       '<button id="tab-quiz">词义测验</button>' +
+      '<button id="tab-en">中译英</button>' +
+      '<button id="tab-spell">拼写</button>' +
       '<button id="tab-book">词书</button>' +
-      '<button id="tab-vip">重点词汇</button></div><div id="vocab-body"></div></div>';
+      '<button id="tab-vip">重点词</button></div><div id="vocab-body"></div></div>';
     var body = document.getElementById("vocab-body");
     document.getElementById("tab-card").onclick = function () { setTab(this); renderFlash(body); };
     document.getElementById("tab-quiz").onclick = function () { setTab(this); renderQuiz(body); };
+    document.getElementById("tab-en").onclick = function () { setTab(this); renderEnQuiz(body); };
+    document.getElementById("tab-spell").onclick = function () { setTab(this); renderSpell(body); };
     document.getElementById("tab-book").onclick = function () { setTab(this); renderVocabBook(body); };
     document.getElementById("tab-vip").onclick = function () { setTab(this); renderVipVocab(body); };
     renderFlash(body);
@@ -370,6 +431,62 @@
         };
       });
       document.getElementById("qbtn").onclick = function () { if (selected !== null) newQ(); };
+    }
+    newQ();
+  }
+  function renderSpell(body) {
+    var words = bookWords(store("cet4_book", "all"));
+    if (!words.length) { body.innerHTML = '<div class="info">当前词书为空，请到「词书」选择。</div>'; return; }
+    var idx = Math.floor(Math.random() * words.length), done = null;
+    function draw() {
+      var w = words[idx], mm = wmeta(w.w);
+      body.innerHTML = '<div class="between"><span class="muted">拼写 · ' + (idx + 1) + " / " + words.length + '</span><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></div>' +
+        '<div class="card" style="text-align:center"><div class="muted">根据释义拼写单词</div><div style="font-size:20px;margin:12px 0;line-height:1.6">' + esc(w.m) + "</div>" +
+        (w.p ? '<div class="muted">/' + esc(w.p) + "/</div>" : "") + '<div class="muted" style="font-size:12px;margin-top:6px">近5年×' + mm.f5 + " · 难度：" + (mm.d || "—") + "</div></div>" +
+        '<input type="text" id="sp-in" placeholder="输入英文单词…" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+        '<button class="btn block" id="sp-check" style="margin-top:12px">检查</button><div id="sp-res"></div>';
+      var inp = document.getElementById("sp-in"); inp.focus();
+      function check() {
+        if (done !== null) return;
+        var v = inp.value.trim(); if (!v) return;
+        var ok = v.toLowerCase() === w.w.toLowerCase(); done = ok;
+        recordAnswer("spell", ok);
+        document.getElementById("sp-res").innerHTML = '<div class="info ' + (ok ? "" : "warn") + '" style="margin-top:12px">' + (ok ? "✓ 正确！" : "✗ 正确答案：<b>" + esc(w.w) + "</b>") + '</div><button class="btn block" id="sp-next" style="margin-top:8px">下一题</button>';
+        document.getElementById("sp-next").onclick = function () { idx = Math.floor(Math.random() * words.length); done = null; draw(); };
+      }
+      document.getElementById("sp-check").onclick = check;
+      inp.onkeydown = function (e) { if (e.key === "Enter") check(); };
+      document.getElementById("fav-btn").onclick = function () { var on = toggleFav(w.w, w.m); this.classList.toggle("on", on); toast(on ? "已收藏" : "已取消"); };
+    }
+    draw();
+  }
+  function renderEnQuiz(body) {
+    var words = bookWords(store("cet4_book", "all"));
+    if (words.length < 4) { body.innerHTML = '<div class="info">当前词书单词太少，无法测验。</div>'; return; }
+    var target, options, selected = null, score = 0, total = 0;
+    function newQ() {
+      target = words[Math.floor(Math.random() * words.length)];
+      var set = {}; set[target.w] = target; var g = 0;
+      while (Object.keys(set).length < 4 && g++ < 300) { var w = words[Math.floor(Math.random() * words.length)]; set[w.w] = w; }
+      options = shuffle(Object.keys(set).map(function (k) { return set[k]; }));
+      selected = null; draw();
+    }
+    function draw() {
+      var correctK = options.findIndex(function (o) { return o.w === target.w; });
+      var html = '<div class="between"><span class="muted">得分 ' + score + " / " + total + '</span><span class="muted">看释义，选单词</span></div>' +
+        '<div class="card" style="text-align:center;margin-top:12px"><p class="muted">下列释义对应的单词是？</p><div style="font-size:18px;line-height:1.6">' + esc(target.m) + "</div></div>";
+      options.forEach(function (o, i) {
+        var cls = "opt";
+        if (selected !== null) { cls += " locked"; if (i === correctK) cls += " correct"; else if (i === selected) cls += " wrong"; }
+        html += '<div class="' + cls + '" data-i="' + i + '"><span class="k">' + String.fromCharCode(65 + i) + ".</span><span>" + esc(o.w) + "</span></div>";
+      });
+      if (selected !== null) html += '<p style="font-weight:600;color:' + (selected === correctK ? "var(--green)" : "var(--red)") + '">' + (selected === correctK ? "回答正确！" : "回答错误，正确答案已标绿。") + "</p>";
+      html += '<button class="btn block" id="enq-btn" ' + (selected === null ? "disabled" : "") + ">" + (selected === null ? "请选择答案" : "下一题") + "</button>";
+      body.innerHTML = html;
+      body.querySelectorAll(".opt").forEach(function (el) {
+        el.onclick = function () { if (selected !== null) return; selected = parseInt(el.getAttribute("data-i"), 10); total++; if (selected === correctK) score++; draw(); };
+      });
+      document.getElementById("enq-btn").onclick = function () { if (selected !== null) newQ(); };
     }
     newQ();
   }
@@ -650,7 +767,7 @@
 
     function mcq(q) {
       var opts = (q.options || []).map(strip);
-      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(q.stem || "") + '" data-opts="' + esc(JSON.stringify(opts)) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(q.stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
+      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(q.stem || "") + '" data-opts="' + esc(JSON.stringify(opts)) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + diffBadge(q.diff) + q.qno + ". " + esc(q.stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
       (q.options || []).forEach(function (o, oi) {
         h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(strip(o)) + "</span></div>";
       });
@@ -658,7 +775,7 @@
     }
     function selQ(q, opts, isCloze) {
       var stem = isCloze ? ("第 " + q.qno + " 空") : q.stem;
-      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(stem || "") + '" data-opts="' + esc(JSON.stringify(opts.map(function (x) { return x.t; }))) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
+      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(stem || "") + '" data-opts="' + esc(JSON.stringify(opts.map(function (x) { return x.t; }))) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + diffBadge(q.diff) + q.qno + ". " + esc(stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
       h += '<select class="z-sel"><option value="">— 选择 —</option>';
       opts.forEach(function (o) { h += '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; });
       return h + "</select></div>";
@@ -926,7 +1043,7 @@
     ]
   };
   var DAILY = ["背 30 个单词", "做 1 套听力", "精读 1 篇阅读", "写/译 1 篇"];
-  function renderPlan() {
+  function renderPlanOld() {
     var exam = new Date(PLAN.exam + "T09:00:00");
     var now = new Date();
     var days = Math.max(0, Math.ceil((exam - now) / 86400000));
@@ -1330,6 +1447,101 @@
     if (r.weak) { g.fillStyle = "#37474f"; g.font = "28px " + F; g.fillText("提升建议：弱项「" + r.weak + "」正确率 " + r.weakR + "%，建议专项突破并复习错题本。", 60, y); }
     g.fillStyle = "#9aa0b4"; g.font = "22px " + F; g.fillText("四级备考 · CET-4 Coach", 60, H - 40);
     var a = document.createElement("a"); a.download = "四级学习报告.png"; a.href = cv.toDataURL("image/png"); a.click();
+  }
+
+  /* ---------- 学习计划（新版：分阶段 + AI + 模考 + 打卡） ---------- */
+  var EXAM_DATE = "2026-12-12";
+  var DAILY3 = ["背 30 个单词", "听力 1 套 / 精听", "精读 1 篇阅读", "写或译 1 篇", "复习错题本"];
+  function planDays() { return Math.max(0, Math.ceil((new Date(EXAM_DATE + "T09:00:00") - new Date()) / 86400000)); }
+  function planStreak(data) {
+    var s = 0, d = new Date();
+    function key(x) { return x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2) + "-" + ("0" + x.getDate()).slice(-2); }
+    for (; ;) { var r = data[key(d)]; if (r && DAILY3.filter(function (_, i) { return r[i]; }).length >= 3) { s++; d.setDate(d.getDate() - 1); } else break; }
+    return s;
+  }
+  function renderPlan() {
+    var days = planDays();
+    var now = new Date();
+    var todayKey = now.getFullYear() + "-" + ("0" + (now.getMonth() + 1)).slice(-2) + "-" + ("0" + now.getDate()).slice(-2);
+    var data = store("cet4_plan", {});
+    var done = data[todayKey] || {};
+    var doneCount = DAILY3.filter(function (_, i) { return done[i]; }).length;
+    var streak = planStreak(data);
+    var mocks = store("cet4_mock", []);
+    var enc = doneCount === DAILY3.length ? "今日任务全部完成，太棒了，保持节奏！" : (doneCount > 0 ? "已完成 " + doneCount + " 项，继续加油！" : "新的一天，先背几个单词热热身吧");
+    var phases = [
+      { t: "第一阶段 · 打基础", w: "考前约 2 个月～1 个月", d: "每周 1 套真题（限时）；主攻词汇 + 听力精听 + 阅读技巧，穿插词根与短语。" },
+      { t: "第二阶段 · 强化", w: "考前约 1 个月～2 周", d: "每周 2 套真题；翻译/写作为专项，穿插语法与搭配攻坚（薄弱项优先）。" },
+      { t: "第三阶段 · 冲刺", w: "考前 2 周内", d: "每 2 天 1 套限时真题；背作文模板、狂看错题本，保持手感与节奏。" }
+    ];
+    var html = '<div class="page">' +
+      '<div class="hero"><h1>距四级考试还有 ' + days + ' 天</h1><p>考试日期：2026-12-12（周六上午）· 每天建议学习 3–4 小时</p><span class="pill">连续打卡 ' + streak + ' 天</span></div>' +
+      '<div class="section-title">今日打卡（' + todayKey + '）· ' + enc + '</div><div class="card">';
+    DAILY3.forEach(function (t, i) {
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:7px 0;font-size:15px"><input type="checkbox" data-day="' + i + '" ' + (done[i] ? "checked" : "") + ' style="width:20px;height:20px">' + esc(t) + "</label>";
+    });
+    html += '<div class="progress" style="margin-top:8px"><i style="width:' + Math.round(doneCount / DAILY3.length * 100) + '%"></i></div>' +
+      '<div class="muted">今日完成 ' + doneCount + "/" + DAILY3.length + (doneCount === DAILY3.length ? " · 已打卡 ✓" : "") + "</div></div>";
+
+    html += '<div class="section-title">分阶段计划</div>';
+    phases.forEach(function (p) {
+      html += '<div class="card"><div class="between"><b>' + esc(p.t) + '</b><span class="muted">' + esc(p.w) + '</span></div><div style="margin-top:6px" class="muted">' + esc(p.d) + "</div></div>";
+    });
+
+    html += '<div class="section-title">模考成绩录入</div><div class="card">' +
+      '<div class="row"><label class="fld" style="flex:1"><span>日期</span><input type="date" id="mk-date" value="' + todayKey + '"></label>' +
+      '<label class="fld" style="flex:1"><span>听力 正确/25</span><input type="number" id="mk-l" min="0" max="25" value="' + (mocks.length ? "" : "") + '" placeholder="如 18"></label></div>' +
+      '<div class="row"><label class="fld" style="flex:1"><span>阅读 正确/30</span><input type="number" id="mk-r" min="0" max="30" placeholder="如 24"></label>' +
+      '<label class="fld" style="flex:1"><span>写作+翻译 估分/30</span><input type="number" id="mk-w" min="0" max="30" placeholder="如 20"></label></div>' +
+      '<button class="btn block" id="mk-save">保存本次模考成绩</button>' +
+      (mocks.length ? '<div style="margin-top:10px" class="muted">已记录 ' + mocks.length + ' 次模考：' + mocks.slice(-3).map(function (m) { return m.date + " 听" + m.l + "/阅" + m.r + "/写译" + m.w; }).join("；") + "</div>" : "") +
+      "</div>";
+
+    html += '<div class="section-title">AI 智能计划</div><div class="card">' +
+      '<div class="muted" style="margin-bottom:10px">根据你的做题记录与模考成绩，AI 生成/微调专属计划（在 App 内直接读取你的本地数据）。</div>' +
+      '<button class="btn block" id="plan-ai">让 AI 制定 / 调整计划</button><div id="plan-ai-res"></div></div>';
+    html += "</div>";
+    main.innerHTML = html;
+
+    main.querySelectorAll("[data-day]").forEach(function (cb) {
+      cb.onchange = function () {
+        var d = store("cet4_plan", {});
+        d[todayKey] = d[todayKey] || {};
+        d[todayKey][parseInt(cb.getAttribute("data-day"), 10)] = cb.checked;
+        saveStore("cet4_plan", d);
+        renderPlan();
+      };
+    });
+    document.getElementById("mk-save").onclick = function () {
+      var l = parseInt(document.getElementById("mk-l").value, 10), r = parseInt(document.getElementById("mk-r").value, 10), w = parseInt(document.getElementById("mk-w").value, 10);
+      if (isNaN(l) || isNaN(r)) { toast("请填写听力与阅读正确数"); return; }
+      var list = store("cet4_mock", []);
+      list.push({ date: document.getElementById("mk-date").value || todayKey, l: l, r: r, w: isNaN(w) ? 0 : w });
+      saveStore("cet4_mock", list);
+      toast("已保存，可在 AI 计划中使用");
+      renderPlan();
+    };
+    document.getElementById("plan-ai").onclick = function () { aiPlan(this, document.getElementById("plan-ai-res")); };
+  }
+  function aiPlan(btn, res) {
+    if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+    var p = store("cet4_progress", { a: 0, c: 0, types: {} });
+    var mocks = store("cet4_mock", []);
+    var types = p.types || {};
+    var weak = [];
+    for (var t in types) { if (types[t].a >= 3) weak.push({ type: t, acc: Math.round(types[t].c / types[t].a * 100) }); }
+    weak.sort(function (a, b) { return a.acc - b.acc; });
+    var profile = "距离考试还有 " + planDays() + " 天；累计做题 " + p.a + " 道，总正确率 " + (p.a ? Math.round(p.c / p.a * 100) : 0) + "%。" +
+      "分题型正确率：" + JSON.stringify(types) + "。模考记录：" + JSON.stringify(mocks) + "。";
+    var prompt = "学生情况：" + profile +
+      "\n请制定一份个性化的四级备考计划：前约 1 个月每周 1 套真题，后 1 个月每周 2 套，临近考试每 2 天 1 套，中间穿插薄弱项攻坚；每天可学 3-4 小时。" +
+      "请用中文 Markdown 输出，分周列出重点与每日时间分配，语言简洁可执行，并针对其薄弱题型给出具体建议。";
+    btn.disabled = true; var old = btn.textContent; btn.innerHTML = '<span class="spin"></span> 生成中…';
+    res.innerHTML = "";
+    callAI([{ role: "system", content: "你是资深四级备考规划师。" }, { role: "user", content: prompt }])
+      .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>"; saveStore("cet4_ai_plan", md); })
+      .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
+      .then(function () { btn.disabled = false; btn.textContent = old; });
   }
 
   /* ---------- settings ---------- */
