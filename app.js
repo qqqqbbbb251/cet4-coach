@@ -2,6 +2,7 @@
   "use strict";
 
   var DATA = window.CET4_DATA || { words: [], vocabulary: [], reading: [], listening: [], translations: [], writing: [], collocations: [], grammar: [], mocks: [] };
+  var ZHENTI = window.CET4_ZHENTI || [];
   var main = document.getElementById("main");
 
   /* ---------- helpers ---------- */
@@ -170,6 +171,7 @@
   function renderHome() {
     var ok = configured();
     var cards = [
+      { key: "zhenti", t: "历年真题", d: "76 套真题（2015–2026）· 3325 题 · 含答案解析，自动判分", ic: "卷", c: "#B71C1C" },
       { key: "plan", t: "学习计划", d: "距考试倒计时 · 每周主题 · 每日打卡进度", ic: "计", c: "#C62828" },
       { key: "ocr", t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 解析 + 建议", ic: "拍", c: "#D81B60" },
       { key: "vocab", t: "单词检测", d: "4537 个四级词汇 · 单词卡 + 词义测验 + 重点词汇", ic: "Aa", c: "#3949AB" },
@@ -490,6 +492,190 @@
     });
   }
 
+  /* ---------- 历年真题 ---------- */
+  function renderZhentiList() {
+    var list = (ZHENTI || []).slice().sort(function (a, b) { return b.id.localeCompare(a.id); });
+    listPage("历年真题（" + list.length + " 套 · 2015–2026）", list, function (p, i) {
+      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#B71C1C1f;color:#B71C1C">卷</div>' +
+        '<div><h3>' + esc(p.source) + '</h3><p>' + p.questions.length + ' 题 · 含答案与详细解析</p></div>' +
+        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+    }, renderZhentiDetail);
+  }
+
+  function renderZhentiDetail(p) {
+    function l2i(a) { return a ? a.toUpperCase().charCodeAt(0) - 65 : -1; }
+    function strip(o) { return String(o).replace(/^[A-Za-z]\)\s*/, ""); }
+    var listening = p.questions.filter(function (q) { return q.type === "listening"; });
+    var cloze = p.questions.filter(function (q) { return q.type === "cloze"; });
+    var match = p.questions.filter(function (q) { return q.type === "match"; });
+    var reading = p.questions.filter(function (q) { return q.type === "reading"; });
+    var bank = (cloze[0] && cloze[0].options) || [];
+    var labels = (p.matchParagraphs || []).map(function (x) { return x.label; });
+
+    function mcq(q) {
+      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-analysis="' + esc((q.analysis || "").slice(0, 4000)) + '"><div class="stem">' + q.qno + ". " + esc(q.stem) + "</div>";
+      (q.options || []).forEach(function (o, oi) {
+        h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(strip(o)) + "</span></div>";
+      });
+      return h + "</div>";
+    }
+    function selQ(q, opts, isCloze) {
+      var stem = isCloze ? ("第 " + q.qno + " 空") : q.stem;
+      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-analysis="' + esc((q.analysis || "").slice(0, 4000)) + '"><div class="stem">' + q.qno + ". " + esc(stem) + "</div>";
+      h += '<select class="z-sel"><option value="">— 选择 —</option>';
+      opts.forEach(function (o) { h += '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; });
+      return h + "</select></div>";
+    }
+
+    var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(p.source) + "</div>";
+
+    if (p.writing) {
+      html += '<div class="card"><h2>Part I　写作</h2><div class="passage">' + esc(p.writing.prompt) + "</div>" +
+        '<textarea id="z-wr" rows="6" placeholder="在此写作文（至少 120 词）…"></textarea>' +
+        '<div class="row" style="margin-top:10px"><button class="btn" id="z-wr-grade">AI 批改作文</button><button class="btn ghost" id="z-wr-sample">参考范文</button></div>' +
+        '<div id="z-wr-samplebox" style="display:none;margin-top:10px"></div><div id="z-wr-res"></div></div>';
+    }
+    if (listening.length) {
+      html += '<div class="card section-card"><h2>Part II　听力（' + listening.length + ' 题）</h2>';
+      if (p.listeningUrl) html += '<div class="info">🎧 在线收听本套听力（含时间轴）：<a href="' + esc(p.listeningUrl) + '" target="_blank" rel="noopener">点击打开</a></div>';
+      listening.forEach(function (q) { html += mcq(q); });
+      html += "</div>";
+    }
+    if (cloze.length) {
+      html += '<div class="card section-card"><h2>Part III-A　选词填空</h2><div class="passage">' + esc(p.clozePassage) + "</div>" +
+        '<div class="info">词库：' + bank.map(function (o) { return esc(o); }).join("　") + "</div>";
+      var bankOpts = bank.map(function (o) { return { v: o.charAt(0).toUpperCase(), t: o }; });
+      cloze.forEach(function (q) { html += selQ(q, bankOpts, true); });
+      html += "</div>";
+    }
+    if (match.length) {
+      html += '<div class="card section-card"><h2>Part III-B　信息匹配</h2><div class="stem" style="font-weight:600;margin-bottom:6px">' + esc(p.matchIntro || "") + "</div>";
+      (p.matchParagraphs || []).forEach(function (x) { html += '<div class="passage" style="margin:8px 0"><b>' + esc(x.label) + ") </b>" + esc(x.text) + "</div>"; });
+      var labelOpts = labels.map(function (l) { return { v: l, t: l }; });
+      match.forEach(function (q) { html += selQ(q, labelOpts, false); });
+      html += "</div>";
+    }
+    if (reading.length) {
+      html += '<div class="card section-card"><h2>Part III-C　仔细阅读</h2>';
+      reading.forEach(function (q) {
+        var pas = (p.readingPassages || {})[String(q.qno)];
+        if (pas) html += '<div class="passage">' + esc(pas) + "</div>";
+        html += mcq(q);
+      });
+      html += "</div>";
+    }
+    if (p.translation) {
+      html += '<div class="card"><h2>Part IV　翻译</h2><div class="passage">' + esc(p.translation.prompt) + "</div>" +
+        '<textarea id="z-tr" rows="4" placeholder="在此写译文…"></textarea>' +
+        '<div class="row" style="margin-top:10px"><button class="btn" id="z-tr-grade">AI 批改翻译</button><button class="btn ghost" id="z-tr-sample">参考译文</button></div>' +
+        '<div id="z-tr-samplebox" style="display:none;margin-top:10px"></div><div id="z-tr-res"></div></div>';
+    }
+    if (listening.length || cloze.length || match.length || reading.length) {
+      html += '<div class="card"><button class="btn block submit-btn">提交客观题批改</button><div id="z-score"></div></div>';
+    }
+    html += "</div>";
+    main.innerHTML = html;
+    document.getElementById("backslot").appendChild(backBar("返回", renderZhentiList));
+
+    main.querySelectorAll(".zq[data-kind=mcq] .opt").forEach(function (el) {
+      el.onclick = function () {
+        var card = el.closest(".section-card");
+        if (card && card.dataset.graded) return;
+        var q = el.closest(".zq");
+        q.querySelectorAll(".opt").forEach(function (o) { o.classList.remove("sel"); });
+        el.classList.add("sel");
+      };
+    });
+
+    function gradeCard(card) {
+      var correct = 0, total = 0;
+      card.querySelectorAll(".zq").forEach(function (q) {
+        total++;
+        var ans = q.getAttribute("data-ans"), ok = false;
+        if (q.getAttribute("data-kind") === "mcq") {
+          var sel = q.querySelector(".opt.sel");
+          q.querySelectorAll(".opt").forEach(function (o) {
+            o.classList.add("locked");
+            var oi = parseInt(o.getAttribute("data-oi"), 10);
+            if (oi === parseInt(ans, 10)) o.classList.add("correct");
+            else if (sel && o === sel) o.classList.add("wrong");
+          });
+          ok = sel && parseInt(sel.getAttribute("data-oi"), 10) === parseInt(ans, 10);
+        } else {
+          var s = q.querySelector(".z-sel");
+          if (s.value === ans) { ok = true; s.classList.add("correct"); }
+          else if (s.value) s.classList.add("wrong");
+          s.classList.add("locked");
+        }
+        if (ok) correct++;
+        var an = q.getAttribute("data-analysis");
+        if (an) { var d = document.createElement("div"); d.className = "explain"; d.textContent = "解析：" + an; q.appendChild(d); }
+      });
+      card.dataset.graded = "1";
+      return [correct, total];
+    }
+
+    var submit = main.querySelector(".submit-btn");
+    if (submit) submit.onclick = function () {
+      if (main.dataset.zgraded) {
+        main.querySelectorAll(".section-card").forEach(function (c) {
+          delete c.dataset.graded;
+          c.querySelectorAll(".explain,.score-bar").forEach(function (e) { e.remove(); });
+          c.querySelectorAll(".opt").forEach(function (o) { o.className = "opt"; });
+          c.querySelectorAll(".z-sel").forEach(function (s) { s.value = ""; s.className = "z-sel"; });
+        });
+        document.getElementById("z-score").innerHTML = "";
+        main.dataset.zgraded = "";
+        submit.textContent = "提交客观题批改";
+        return;
+      }
+      var c = 0, t = 0;
+      main.querySelectorAll(".section-card").forEach(function (card) {
+        var r = gradeCard(card);
+        c += r[0]; t += r[1];
+        var bar = document.createElement("div");
+        bar.className = "score-bar";
+        bar.textContent = "本部分得分：" + r[0] + " / " + r[1];
+        card.insertBefore(bar, card.firstChild);
+      });
+      document.getElementById("z-score").innerHTML = '<div class="info" style="margin-top:10px">客观题总计：<b>' + c + " / " + t + "</b>（每题下方已给出答案与解析）</div>";
+      main.dataset.zgraded = "1";
+      submit.textContent = "重做";
+    };
+
+    if (p.writing) {
+      document.getElementById("z-wr-sample").onclick = function () {
+        var b = document.getElementById("z-wr-samplebox"); var show = b.style.display === "none";
+        b.style.display = show ? "block" : "none"; b.innerHTML = '<div class="ai-result">' + esc(p.writing.sample || "").replace(/\n/g, "<br>") + "</div>";
+      };
+      document.getElementById("z-wr-grade").onclick = function () {
+        var ta = document.getElementById("z-wr");
+        if (ta.value.trim().length < 20) { toast("作文太短"); return; }
+        aiRun(this, document.getElementById("z-wr-res"), function () { return gradeEssay(p.writing.prompt, ta.value.trim()); });
+      };
+    }
+    if (p.translation) {
+      document.getElementById("z-tr-sample").onclick = function () {
+        var b = document.getElementById("z-tr-samplebox"); var show = b.style.display === "none";
+        b.style.display = show ? "block" : "none"; b.innerHTML = '<div class="info">' + esc(p.translation.sample || "") + "</div>";
+      };
+      document.getElementById("z-tr-grade").onclick = function () {
+        var ta = document.getElementById("z-tr");
+        if (ta.value.trim().length < 2) { toast("请先写译文"); return; }
+        aiRun(this, document.getElementById("z-tr-res"), function () { return gradeTranslation(p.translation.prompt, p.translation.sample, ta.value.trim()); });
+      };
+    }
+  }
+
+  function aiRun(btn, res, fn) {
+    if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+    var old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
+    res.innerHTML = "";
+    fn().then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>"; })
+      .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
+      .then(function () { btn.disabled = false; btn.textContent = old; });
+  }
+
   /* ---------- 拍照批改 ---------- */
   function renderOcr() {
     var kind = "essay";
@@ -656,6 +842,7 @@
   function openView(name) {
     currentView = name; window.scrollTo(0, 0);
     if (name === "home") renderHome();
+    else if (name === "zhenti") renderZhentiList();
     else if (name === "plan") renderPlan();
     else if (name === "ocr") renderOcr();
     else if (name === "vocab") renderVocab();
