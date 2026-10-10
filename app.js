@@ -42,8 +42,16 @@
     if (inList) html += "</ul>";
     return html;
   }
-  var READ_LABEL = { cloze: "选词填空", matching: "段落匹配", reading: "阅读理解" };
-  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  function hiExp(exp, kw) {
+    var e = esc(exp || "");
+    (kw || []).forEach(function (k) {
+      if (!k) return;
+      var ek = esc(k).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      try { e = e.replace(new RegExp(ek, "gi"), function (m) { return "<mark>" + m + "</mark>"; }); } catch (err) { }
+    });
+    return e;
+  }
+  var READ_LABEL = { cloze: "选词填空", matching: "段落匹配", reading: "阅读理解" };  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -513,7 +521,7 @@
     var labels = (p.matchParagraphs || []).map(function (x) { return x.label; });
 
     function mcq(q) {
-      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-analysis="' + esc((q.analysis || "").slice(0, 4000)) + '"><div class="stem">' + q.qno + ". " + esc(q.stem) + "</div>";
+      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(q.stem) + "</div>";
       (q.options || []).forEach(function (o, oi) {
         h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(strip(o)) + "</span></div>";
       });
@@ -521,7 +529,7 @@
     }
     function selQ(q, opts, isCloze) {
       var stem = isCloze ? ("第 " + q.qno + " 空") : q.stem;
-      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-analysis="' + esc((q.analysis || "").slice(0, 4000)) + '"><div class="stem">' + q.qno + ". " + esc(stem) + "</div>";
+      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + q.qno + ". " + esc(stem) + "</div>";
       h += '<select class="z-sel"><option value="">— 选择 —</option>';
       opts.forEach(function (o) { h += '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; });
       return h + "</select></div>";
@@ -608,8 +616,15 @@
           s.classList.add("locked");
         }
         if (ok) correct++;
-        var an = q.getAttribute("data-analysis");
-        if (an) { var d = document.createElement("div"); d.className = "explain"; d.textContent = "解析：" + an; q.appendChild(d); }
+        var exp = q.getAttribute("data-exp");
+        if (exp) {
+          var kw = [];
+          try { kw = JSON.parse(q.getAttribute("data-kw") || "[]"); } catch (e) { kw = []; }
+          var d = document.createElement("div");
+          d.className = "explain";
+          d.innerHTML = "<b>解析：</b>" + hiExp(exp, kw);
+          q.appendChild(d);
+        }
       });
       card.dataset.graded = "1";
       return [correct, total];
