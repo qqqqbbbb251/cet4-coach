@@ -228,7 +228,9 @@
       { key: "wrong", t: "错题本", d: "自动收集错题 · 智能复习 · 连对出库", ic: "错", c: "#C62828" },
       { key: "fav", t: "生词本", d: "收藏的重点词汇", ic: "★", c: "#C8860A" },
       { key: "qfav", t: "收藏题目", d: "收藏的真题题目 · 集中复习", ic: "☆", c: "#6A1B9A" },
-      { key: "roots", t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测，科学记词", ic: "根", c: "#00838F" }
+      { key: "roots", t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测，科学记词", ic: "根", c: "#00838F" },
+      { key: "eztor", t: "原创模拟", d: "2 套原创模拟卷 · 55 题含答案解析", ic: "拟", c: "#6A1B9A" },
+      { key: "links", t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" }
     ];
     var html = '<div class="page">';
     html += '<div class="hero"><h1>大学英语四级 · 备考</h1><p>单词 · 阅读 · 听力 · 作文 · 翻译，一站式备考。</p>' +
@@ -629,7 +631,7 @@
     }, renderZhentiDetail);
   }
 
-  function renderZhentiDetail(p, focus) {
+  function renderZhentiDetail(p, focus, backFn) {
     focus = focus || "";
     var showWriting = !focus || focus === "writing";
     var showListening = !focus || focus === "listening";
@@ -714,7 +716,7 @@
     }
     html += "</div>";
     main.innerHTML = html;
-    var backTarget = focus === "listening" ? renderListeningList : focus === "reading" ? renderReadingList : focus === "translation" ? renderTranslationList : focus === "writing" ? renderWritingList : renderZhentiList;
+    var backTarget = focus === "listening" ? renderListeningList : focus === "reading" ? renderReadingList : focus === "translation" ? renderTranslationList : focus === "writing" ? renderWritingList : (backFn || renderZhentiList);
     document.getElementById("backslot").appendChild(backBar("返回", backTarget));
 
     main.querySelectorAll(".zq[data-kind=mcq] .opt").forEach(function (el) {
@@ -1191,6 +1193,53 @@
     document.getElementById("wel-ok").onclick = function () { saveStore("cet4_seen", true); document.body.removeChild(mask); };
   }
 
+  /* ---------- 原创模拟卷 ---------- */
+  function renderEztorList() {
+    var list = window.CET4_EZTOR || [];
+    listPage("原创模拟卷（" + list.length + " 套）", list, function (p, i) {
+      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#6A1B9A1f;color:#6A1B9A">拟</div>' +
+        '<div><h3>' + esc(p.source) + "</h3><p>听力25 · 选词10 · 匹配10 · 阅读10 · 写作 · 翻译</p></div>" +
+        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+    }, function (p) { renderZhentiDetail(p, "", renderEztorList); });
+  }
+
+  /* ---------- 更多资料 ---------- */
+  function renderLinks() {
+    var groups = [
+      { t: "题库 · 真题", items: [
+        { t: "gongyining0601/cet4", d: "76 套结构化真题（本站题库来源）", u: "https://github.com/gongyining0601/cet4" },
+        { t: "0609x/CET46-Resources", d: "历年真题 PDF + 答案解析 + 听力音频", u: "https://github.com/0609x/CET46-Resources" },
+        { t: "DieDiDi/CET4-6-past-exam-paper", d: "四六级历年真题汇总", u: "https://github.com/DieDiDi/CET4-6-past-exam-paper" }
+      ] },
+      { t: "词库 · 词根", items: [
+        { t: "ECDICT", d: "词频/难度词典（柯林斯/BNC/COCA）", u: "https://github.com/skywind3000/ECDICT" },
+        { t: "KyleBing/english-vocabulary", d: "英文词汇表大全", u: "https://github.com/KyleBing/english-vocabulary" },
+        { t: "word-root-workshop", d: "词根词缀记忆（本站词根来源）", u: "https://github.com/joeseesun/word-root-workshop" },
+        { t: "2ndLA/english-phrases", d: "英语常用短语", u: "https://github.com/2ndLA/english-phrases" }
+      ] },
+      { t: "模拟 · 备考", items: [
+        { t: "Bailipa/eztor-cet-content", d: "原创四级模拟卷（本站原创模拟来源）", u: "https://github.com/Bailipa/eztor-cet-content" },
+        { t: "Gatsby666-jay/CET-Practice", d: "押题卷 6 套 + 模拟卷（PDF+音频）", u: "https://github.com/Gatsby666-jay/CET-Practice" },
+        { t: "Liuxiangjian-ai/cet-skill", d: "四六级备考策略与评分标准", u: "https://github.com/Liuxiangjian-ai/cet-skill" },
+        { t: "ChuangLee/blind_english", d: "NPR 盲听练习（Flutter App）", u: "https://github.com/ChuangLee/blind_english" }
+      ] },
+      { t: "英语学习 · 综合", items: [
+        { t: "knowledgefxg/learning-english", d: "英语学习资源大全", u: "https://github.com/knowledgefxg/learning-english" },
+        { t: "mengxi-ream/read-frog", d: "沉浸式阅读学习工具", u: "https://github.com/mengxi-ream/read-frog" },
+        { t: "Wei-Xia/most-frequent-technology-english-words", d: "最常见的科技英语词", u: "https://github.com/Wei-Xia/most-frequent-technology-english-words" }
+      ] }
+    ];
+    var html = '<div class="page"><div class="section-title">更多英语学习资源</div><div class="info">以下为 GitHub 上的开源学习资源，点击在新标签页打开。</div>';
+    groups.forEach(function (g) {
+      html += '<div class="section-title">' + esc(g.t) + "</div>";
+      g.items.forEach(function (it) {
+        html += '<div class="card"><a href="' + esc(it.u) + '" target="_blank" rel="noopener" style="text-decoration:none;color:inherit"><b style="color:var(--primary)">' + esc(it.t) + '</b><div class="muted" style="margin-top:4px">' + esc(it.d) + "</div></a></div>";
+      });
+    });
+    html += "</div>";
+    main.innerHTML = html;
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -1247,6 +1296,8 @@
     else if (name === "fav") renderFavList();
     else if (name === "qfav") renderQFav();
     else if (name === "roots") renderRootsList();
+    else if (name === "eztor") renderEztorList();
+    else if (name === "links") renderLinks();
   }
   document.getElementById("btn-home").onclick = function () { openView("home"); };
   document.getElementById("btn-settings").onclick = openSettings;
