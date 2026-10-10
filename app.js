@@ -76,6 +76,15 @@
   function toggleTheme() { var t = store("cet4_theme", "light"); saveStore("cet4_theme", t === "dark" ? "light" : "dark"); applyTheme(); }
   function A2I(a) { return a ? String(a).toUpperCase().charCodeAt(0) - 65 : -1; }
   function stripA(o) { return String(o).replace(/^[A-Za-z]\)\s*/, ""); }
+  function examEst(h, ht, r, rt, w, wt) {
+    ht = ht || 25; rt = rt || 30; wt = wt || 30;
+    var wr = (w == null ? 0.6 * wt : w);
+    var e = Math.round(h / ht * 248.5 + r / rt * 248.5 + wr / wt * 212.5);
+    return Math.min(710, Math.max(0, e));
+  }
+  function examList() { return store("cet4_exam", []); }
+  function addExam(rec) { var l = examList(); l.push(rec); saveStore("cet4_exam", l); }
+  function examAvg() { var l = examList(); if (!l.length) return 0; var s = 0; l.forEach(function (x) { s += x.est; }); return Math.round(s / l.length); }
 
   /* ---------- 词书 / 词频 / 难度 ---------- */
   function wmeta(w) { return (window.CET4_WORDMETA || {})[w] || { f5: 0, f10: 0, d: "" }; }
@@ -791,7 +800,7 @@
     }
     if (showListening && listening.length) {
       var zaudio = (window.CET4_ZAUDIO || {})[p.id];
-      html += '<div class="card section-card"><h2>Part II　听力（' + listening.length + ' 题）</h2>';
+      html += '<div class="card section-card" data-ztype="listening"><h2>Part II　听力（' + listening.length + ' 题）</h2>';
       if (zaudio) {
         html += '<audio controls preload="none" id="za" style="width:100%" src="' + esc(zaudio) + '"></audio>' +
           (p.listeningUrl ? '<div class="muted" style="margin:6px 0">音频加载不出时：<a href="' + esc(p.listeningUrl) + '" target="_blank" rel="noopener">在线收听</a></div>' : "");
@@ -802,21 +811,21 @@
       html += "</div>";
     }
     if (showReading && cloze.length) {
-      html += '<div class="card section-card"><h2>Part III-A　选词填空</h2><div class="passage">' + esc(p.clozePassage) + "</div>" +
+      html += '<div class="card section-card" data-ztype="cloze"><h2>Part III-A　选词填空</h2><div class="passage">' + esc(p.clozePassage) + "</div>" +
         '<div class="info">词库：' + bank.map(function (o) { return esc(o); }).join("　") + "</div>";
       var bankOpts = bank.map(function (o) { return { v: o.charAt(0).toUpperCase(), t: o }; });
       cloze.forEach(function (q) { html += selQ(q, bankOpts, true); });
       html += "</div>";
     }
     if (showReading && match.length) {
-      html += '<div class="card section-card"><h2>Part III-B　信息匹配</h2><div class="stem" style="font-weight:600;margin-bottom:6px">' + esc(p.matchIntro || "") + "</div>";
+      html += '<div class="card section-card" data-ztype="match"><h2>Part III-B　信息匹配</h2><div class="stem" style="font-weight:600;margin-bottom:6px">' + esc(p.matchIntro || "") + "</div>";
       (p.matchParagraphs || []).forEach(function (x) { html += '<div class="passage" style="margin:8px 0"><b>' + esc(x.label) + ") </b>" + esc(x.text) + "</div>"; });
       var labelOpts = labels.map(function (l) { return { v: l, t: l }; });
       match.forEach(function (q) { html += selQ(q, labelOpts, false); });
       html += "</div>";
     }
     if (showReading && reading.length) {
-      html += '<div class="card section-card"><h2>Part III-C　仔细阅读</h2>';
+      html += '<div class="card section-card" data-ztype="reading"><h2>Part III-C　仔细阅读</h2>';
       reading.forEach(function (q) {
         var pas = (p.readingPassages || {})[String(q.qno)];
         if (pas) html += '<div class="passage">' + esc(pas) + "</div>";
@@ -922,10 +931,11 @@
         submit.textContent = "提交客观题批改";
         return;
       }
-      var c = 0, t = 0;
+      var c = 0, t = 0, sums = { listening: [0, 0], cloze: [0, 0], match: [0, 0], reading: [0, 0] };
       main.querySelectorAll(".section-card").forEach(function (card) {
         var r = gradeCard(card);
         c += r[0]; t += r[1];
+        var z = card.getAttribute("data-ztype"); if (sums[z]) { sums[z][0] += r[0]; sums[z][1] += r[1]; }
         var bar = document.createElement("div");
         bar.className = "score-bar";
         bar.textContent = "本部分得分：" + r[0] + " / " + r[1];
@@ -934,6 +944,16 @@
       document.getElementById("z-score").innerHTML = '<div class="info" style="margin-top:10px">客观题总计：<b>' + c + " / " + t + "</b>（每题下方已给出答案与解析）</div>";
       main.dataset.zgraded = "1";
       submit.textContent = "重做";
+      if (!focus) {
+        var h = sums.listening[0], ht = sums.listening[1];
+        var rc = sums.cloze[0] + sums.match[0] + sums.reading[0];
+        var rt = sums.cloze[1] + sums.match[1] + sums.reading[1];
+        if (t > 0) {
+          var est = examEst(h, ht || 25, rc, rt || 30, null, 30);
+          addExam({ date: todayKey(), source: (p.source || p.id) + " 套卷作答", h: h, ht: ht || 25, r: rc, rt: rt || 30, w: null, wt: 30, est: est, writingEstimated: true });
+          document.getElementById("z-score").innerHTML += '<div class="info" style="margin-top:8px">已记为一次<b>套卷考试</b>：估算 <b>' + est + " / 710</b>（写作翻译按 60% 估算，可在计划页录入精确分）。</div>";
+        }
+      }
     };
 
     if (showWriting && p.writing) {
@@ -1096,7 +1116,7 @@
   }
 
   /* ---------- 仪表盘 ---------- */
-  function renderDashboard() {
+  function renderDashboardOld() {
     var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
     var acc = p.a ? Math.round(p.c / p.a * 100) : 0;
     var est = p.a ? Math.min(710, Math.round(p.c / p.a * 497 + 128)) : 0;
@@ -1394,7 +1414,7 @@
     var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", obj: "练习" };
     var types = p.types || {}, weak = null, weakR = 101;
     for (var t in types) { var x = types[t]; if (x.a >= 3) { var rr = x.c / x.a * 100; if (rr < weakR) { weakR = rr; weak = typeNames[t] || t; } } }
-    return { a: p.a, c: p.c, acc: acc, est: est, wrong: wrong, qfav: qfav, fav: fav, checkin: checkin, streak: streak, days: days, types: types, typeNames: typeNames, weak: weak, weakR: Math.round(weakR < 101 ? weakR : 0) };
+    return { a: p.a, c: p.c, acc: acc, est: est, wrong: wrong, qfav: qfav, fav: fav, checkin: checkin, streak: streak, days: days, types: types, typeNames: typeNames, weak: weak, weakR: Math.round(weakR < 101 ? weakR : 0), exams: examList(), examAvg: examAvg() };
   }
   function renderReport() {
     var r = reportData();
@@ -1409,7 +1429,10 @@
     var keys = Object.keys(r.types).filter(function (k) { return r.types[k].a > 0; });
     if (!keys.length) html += '<div class="muted">还没有做题数据，快去真题 / 练习刷几题吧。</div>';
     keys.forEach(function (k) { var x = r.types[k], rr = Math.round(x.c / x.a * 100); html += '<div class="between" style="margin:6px 0"><span>' + (r.typeNames[k] || k) + '</span><span class="muted">' + x.c + "/" + x.a + " · " + rr + '%</span></div><div class="progress"><i style="width:' + rr + '%"></i></div>'; });
-    html += "</div><div class=\"stat-row\">" +
+    html += "</div>";
+    var _ex = r.exams || [];
+    if (_ex.length) { html += '<div class="section-title">考试 / 模考（满分 710）</div><div class="card"><div class="between" style="margin:6px 0"><span>最近一次</span><b style="color:var(--primary)">' + _ex[_ex.length - 1].est + ' / 710</b></div><div class="between" style="margin:6px 0"><span>平均</span><b>' + r.examAvg + ' / 710</b></div><div class="between" style="margin:6px 0"><span>次数</span><b>' + _ex.length + '</b></div></div>'; }
+    html += '<div class="stat-row">' +
       '<div class="stat"><div class="n">' + r.wrong + '</div><div class="l">错题</div></div>' +
       '<div class="stat"><div class="n">' + r.qfav + '</div><div class="l">收藏题</div></div>' +
       '<div class="stat"><div class="n">' + r.fav + '</div><div class="l">生词</div></div></div>';
@@ -1442,6 +1465,7 @@
       g.fillStyle = "#6b7280"; g.textAlign = "right"; g.fillText(x.c + "/" + x.a + "  " + rr + "%", W - 60, y); g.textAlign = "left";
       g.fillStyle = "#e5e7f2"; roundRect(g, 60, y + 14, W - 120, 14, 7); g.fill();
       g.fillStyle = "#3949AB"; roundRect(g, 60, y + 14, (W - 120) * rr / 100, 14, 7); g.fill(); y += 74; });
+    if (r.exams && r.exams.length) { g.fillStyle = "#3949AB"; g.font = "bold 30px " + F; g.fillText("最近模考 " + r.exams[r.exams.length - 1].est + " / 710 · 平均 " + r.examAvg + " / 710", 60, y); y += 56; }
     y += 10; g.fillStyle = "#1c1c22"; g.font = "bold 30px " + F;
     g.fillText("错题 " + r.wrong + " · 收藏题 " + r.qfav + " · 生词 " + r.fav + " · 打卡 " + r.checkin + " 天", 60, y); y += 60;
     if (r.weak) { g.fillStyle = "#37474f"; g.font = "28px " + F; g.fillText("提升建议：弱项「" + r.weak + "」正确率 " + r.weakR + "%，建议专项突破并复习错题本。", 60, y); }
@@ -1467,7 +1491,7 @@
     var done = data[todayKey] || {};
     var doneCount = DAILY3.filter(function (_, i) { return done[i]; }).length;
     var streak = planStreak(data);
-    var mocks = store("cet4_mock", []);
+    var mocks = examList();
     var enc = doneCount === DAILY3.length ? "今日任务全部完成，太棒了，保持节奏！" : (doneCount > 0 ? "已完成 " + doneCount + " 项，继续加油！" : "新的一天，先背几个单词热热身吧");
     var phases = [
       { t: "第一阶段 · 打基础", w: "考前约 2 个月～1 个月", d: "每周 1 套真题（限时）；主攻词汇 + 听力精听 + 阅读技巧，穿插词根与短语。" },
@@ -1494,7 +1518,7 @@
       '<div class="row"><label class="fld" style="flex:1"><span>阅读 正确/30</span><input type="number" id="mk-r" min="0" max="30" placeholder="如 24"></label>' +
       '<label class="fld" style="flex:1"><span>写作+翻译 估分/30</span><input type="number" id="mk-w" min="0" max="30" placeholder="如 20"></label></div>' +
       '<button class="btn block" id="mk-save">保存本次模考成绩</button>' +
-      (mocks.length ? '<div style="margin-top:10px" class="muted">已记录 ' + mocks.length + ' 次模考：' + mocks.slice(-3).map(function (m) { return m.date + " 听" + m.l + "/阅" + m.r + "/写译" + m.w; }).join("；") + "</div>" : "") +
+      (mocks.length ? '<div style="margin-top:10px" class="muted">已记录 ' + mocks.length + ' 次考试：' + mocks.slice(-3).map(function (m) { return m.date + " " + m.est + "/710"; }).join("；") + "</div>" : "") +
       "</div>";
 
     html += '<div class="section-title">AI 智能计划</div><div class="card">' +
@@ -1515,10 +1539,9 @@
     document.getElementById("mk-save").onclick = function () {
       var l = parseInt(document.getElementById("mk-l").value, 10), r = parseInt(document.getElementById("mk-r").value, 10), w = parseInt(document.getElementById("mk-w").value, 10);
       if (isNaN(l) || isNaN(r)) { toast("请填写听力与阅读正确数"); return; }
-      var list = store("cet4_mock", []);
-      list.push({ date: document.getElementById("mk-date").value || todayKey, l: l, r: r, w: isNaN(w) ? 0 : w });
-      saveStore("cet4_mock", list);
-      toast("已保存，可在 AI 计划中使用");
+      var ww = isNaN(w) ? null : w;
+      addExam({ date: document.getElementById("mk-date").value || todayKey, source: "模考录入", h: Math.min(25, l), ht: 25, r: Math.min(30, r), rt: 30, w: ww, wt: 30, est: examEst(Math.min(25, l), 25, Math.min(30, r), 30, ww, 30), writingEstimated: ww == null });
+      toast("已保存（710 折算：" + examEst(Math.min(25, l), 25, Math.min(30, r), 30, ww, 30) + "）");
       renderPlan();
     };
     document.getElementById("plan-ai").onclick = function () { aiPlan(this, document.getElementById("plan-ai-res")); };
@@ -1526,7 +1549,7 @@
   function aiPlan(btn, res) {
     if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
     var p = store("cet4_progress", { a: 0, c: 0, types: {} });
-    var mocks = store("cet4_mock", []);
+    var mocks = examList();
     var types = p.types || {};
     var weak = [];
     for (var t in types) { if (types[t].a >= 3) weak.push({ type: t, acc: Math.round(types[t].c / types[t].a * 100) }); }
@@ -1542,6 +1565,58 @@
       .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>"; saveStore("cet4_ai_plan", md); })
       .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
       .then(function () { btn.disabled = false; btn.textContent = old; });
+  }
+
+  /* ---------- 仪表盘（练习/考试分开 · 710 分制） ---------- */
+  function renderDashboard() {
+    var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
+    var acc = p.a ? Math.round(p.c / p.a * 100) : 0;
+    var pest = p.a ? Math.min(710, Math.round(p.c / p.a * 497 + 128)) : 0;
+    var exams = examList();
+    var examAvgV = examAvg();
+    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", spell: "拼写", obj: "练习" };
+    var wrongN = Object.keys(store("cet4_wrong", {})).length;
+    var favN = Object.keys(getFav()).length;
+
+    var html = '<div class="page"><div class="section-title">学习仪表盘</div>' +
+      '<div class="stat-row">' +
+      '<div class="stat"><div class="n">' + p.a + '</div><div class="l">练习·已做</div></div>' +
+      '<div class="stat"><div class="n">' + p.c + '</div><div class="l">练习·答对</div></div>' +
+      '<div class="stat"><div class="n">' + acc + '%</div><div class="l">练习·正确率</div></div>' +
+      '<div class="stat"><div class="n">' + (pest || "—") + '</div><div class="l">练习估分/710</div></div>' +
+      '</div>';
+
+    html += '<div class="section-title">考试 / 模考成绩（满分 710）</div>';
+    if (!exams.length) {
+      html += '<div class="info">还没有考试记录。做完整套真题并点「提交客观题批改」会<b>自动记一次</b>；也可在「学习计划」页录入模考成绩。</div>';
+    } else {
+      html += '<div class="stat-row">' +
+        '<div class="stat"><div class="n">' + exams[exams.length - 1].est + '</div><div class="l">最近一次</div></div>' +
+        '<div class="stat"><div class="n">' + examAvgV + '</div><div class="l">平均</div></div>' +
+        '<div class="stat"><div class="n">' + Math.max.apply(null, exams.map(function (x) { return x.est; })) + '</div><div class="l">最高</div></div>' +
+        '<div class="stat"><div class="n">' + exams.length + '</div><div class="l">次数</div></div></div>';
+      html += '<div class="card">' + exams.slice().reverse().slice(0, 12).map(function (x) {
+        return '<div class="between" style="margin:6px 0"><span>' + esc(x.date) + " · " + esc(x.source || "") + '</span><span><b style="color:var(--primary)">' + x.est + "</b> /710 <span class=\"muted\">(听" + x.h + "/阅" + x.r + (x.w == null ? "/写译估" : "/写译" + x.w) + ")</span></span></div>";
+      }).join("") + "</div>";
+    }
+
+    var types = p.types || {};
+    var tkeys = Object.keys(types).filter(function (k) { return types[k].a > 0; });
+    if (tkeys.length) {
+      html += '<div class="card"><div class="section-title" style="margin-top:0">练习·分题型正确率</div>';
+      tkeys.forEach(function (k) {
+        var a = types[k].a, c = types[k].c, r = Math.round(c / a * 100);
+        html += '<div class="between" style="margin:6px 0"><span>' + (typeNames[k] || k) + '</span><span class="muted">' + c + "/" + a + " · " + r + '%</span></div><div class="progress"><i style="width:' + r + '%"></i></div>';
+      });
+      html += "</div>";
+    }
+    html += '<div class="grid">' +
+      '<div class="fcard" data-go="wrong"><div class="ic" style="background:#C628281f;color:#C62828">错</div><div class="txt"><h3>错题本</h3><p>' + wrongN + ' 道错题</p></div><div class="arrow">›</div></div>' +
+      '<div class="fcard" data-go="fav"><div class="ic" style="background:#F6B93B1f;color:#C8860A">★</div><div class="txt"><h3>生词本</h3><p>' + favN + ' 个单词</p></div><div class="arrow">›</div></div>' +
+      "</div>" +
+      '<p class="center muted" style="margin-top:16px">练习分来自日常刷题；考试分为整卷/模考的 710 折算。</p></div>';
+    main.innerHTML = html;
+    main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
   }
 
   /* ---------- settings ---------- */
