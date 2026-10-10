@@ -71,7 +71,18 @@
   function applyTheme() { document.body.classList.toggle("dark", store("cet4_theme", "light") === "dark"); }
   function toggleTheme() { var t = store("cet4_theme", "light"); saveStore("cet4_theme", t === "dark" ? "light" : "dark"); applyTheme(); }
   function A2I(a) { return a ? String(a).toUpperCase().charCodeAt(0) - 65 : -1; }
-  function stripA(o) { return String(o).replace(/^[A-Za-z]\)\s*/, ""); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  function stripA(o) { return String(o).replace(/^[A-Za-z]\)\s*/, ""); }
+
+  /* ---------- 词书 / 词频 / 难度 ---------- */
+  function wmeta(w) { return (window.CET4_WORDMETA || {})[w] || { f5: 0, f10: 0, d: "" }; }
+  function bookWords(key) {
+    var meta = window.CET4_WORDMETA || {};
+    if (key === "fav") { var f = getFav(); return DATA.words.filter(function (w) { return f[w.w] != null; }); }
+    if (key === "f5") return DATA.words.filter(function (w) { return (meta[w.w] || {}).f5 >= 8; });
+    if (key === "f10") return DATA.words.filter(function (w) { return (meta[w.w] || {}).f10 >= 15; });
+    if (["基础", "中级", "较难", "高阶"].indexOf(key) >= 0) return DATA.words.filter(function (w) { return (meta[w.w] || {}).d === key; });
+    return DATA.words.slice();
+  }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -280,23 +291,30 @@
     main.innerHTML = '<div class="page"><div class="tabs">' +
       '<button id="tab-card" class="active">单词卡</button>' +
       '<button id="tab-quiz">词义测验</button>' +
+      '<button id="tab-book">词书</button>' +
       '<button id="tab-vip">重点词汇</button></div><div id="vocab-body"></div></div>';
     var body = document.getElementById("vocab-body");
     document.getElementById("tab-card").onclick = function () { setTab(this); renderFlash(body); };
     document.getElementById("tab-quiz").onclick = function () { setTab(this); renderQuiz(body); };
+    document.getElementById("tab-book").onclick = function () { setTab(this); renderVocabBook(body); };
     document.getElementById("tab-vip").onclick = function () { setTab(this); renderVipVocab(body); };
     renderFlash(body);
   }
   function setTab(btn) { btn.parentNode.querySelectorAll("button").forEach(function (b) { b.classList.remove("active"); }); btn.classList.add("active"); }
   function renderFlash(body) {
-    var words = DATA.words, idx = Math.floor(Math.random() * words.length), revealed = false;
+    var words = bookWords(store("cet4_book", "all"));
+    if (!words.length) { body.innerHTML = '<div class="info">当前词书是空的，请到「词书」选择，或先收藏单词。</div>'; return; }
+    var bk = store("cet4_book", "all");
+    var bookLabel = { all: "四级核心", f5: "近5年高频", f10: "近10年高频", "基础": "难度·基础", "中级": "难度·中级", "较难": "难度·较难", "高阶": "难度·高阶", fav: "我的生词本" };
+    var idx = Math.floor(Math.random() * words.length), revealed = false;
     function draw() {
-      var w = words[idx];
+      var w = words[idx]; var mm = wmeta(w.w);
       body.innerHTML =
         '<div class="progress"><i style="width:' + ((idx + 1) / words.length * 100).toFixed(1) + '%"></i></div>' +
-        '<div class="between" style="margin:6px 0"><span class="muted">' + (idx + 1) + " / " + words.length + '</span><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></div>' +
+        '<div class="between" style="margin:6px 0"><span class="muted">' + (bookLabel[bk] || "") + " · " + (idx + 1) + " / " + words.length + '</span><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></div>' +
         '<div class="flash" id="flash-card"><div class="word">' + esc(w.w) + "</div>" +
         (w.p ? '<div class="phon">/' + esc(w.p) + "/</div>" : "") +
+        '<div class="muted" style="font-size:12px;margin-top:8px">近5年×' + mm.f5 + " · 近10年×" + mm.f10 + " · 难度：" + (mm.d || "—") + "</div>" +
         (revealed ? '<div class="mean">' + esc(w.m) + "</div>" : '<div class="hint">点击卡片显示释义</div>') + "</div>" +
         '<div class="row" style="margin-top:16px">' +
         '<button class="btn ghost" id="prev" style="flex:1">上一个</button>' +
@@ -311,7 +329,9 @@
     draw();
   }
   function renderQuiz(body) {
-    var words = DATA.words, target, options, selected = null, score = 0, total = 0;
+    var words = bookWords(store("cet4_book", "all"));
+    if (words.length < 4) { body.innerHTML = '<div class="info">当前词书单词太少（不足 4 个），无法测验，请换一本词书。</div>'; return; }
+    var target, options, selected = null, score = 0, total = 0;
     function newQ() {
       target = words[Math.floor(Math.random() * words.length)];
       var set = {}; set[target.w] = target; var guard = 0;
@@ -364,6 +384,28 @@
     }
     document.getElementById("vip-search").oninput = function () { draw(this.value); };
     draw("");
+  }
+  function renderVocabBook(body) {
+    var books = [
+      { k: "f5", t: "近5年真题·高频", d: "近5年出现 ≥ 8 次" },
+      { k: "f10", t: "近10年真题·高频", d: "近10年出现 ≥ 15 次" },
+      { k: "all", t: "四级核心词汇", d: "全部 4537 词" },
+      { k: "基础", t: "难度 · 基础", d: "最常见的基础词" },
+      { k: "中级", t: "难度 · 中级", d: "" },
+      { k: "较难", t: "难度 · 较难", d: "" },
+      { k: "高阶", t: "难度 · 高阶", d: "较生僻词" },
+      { k: "fav", t: "我的生词本", d: "已收藏的单词" }
+    ];
+    var cur = store("cet4_book", "all");
+    body.innerHTML = '<p class="muted">选择一本词书，单词卡与词义测验只练这本书。</p>' + books.map(function (b) {
+      var n = bookWords(b.k).length;
+      return '<div class="list-item" data-book="' + b.k + '"><div class="ic" style="background:#3949AB1f;color:#3949AB">' + esc(b.t.charAt(0)) + '</div>' +
+        '<div><h3>' + esc(b.t) + (b.k === cur ? " ✓" : "") + "</h3><p>" + n + " 词" + (b.d ? " · " + b.d : "") + "</p></div>" +
+        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+    }).join("");
+    body.querySelectorAll("[data-book]").forEach(function (el) {
+      el.onclick = function () { saveStore("cet4_book", el.getAttribute("data-book")); toast("已选择词书"); document.getElementById("tab-card").click(); };
+    });
   }
 
   /* ---------- reading ---------- */
@@ -622,8 +664,14 @@
         '<div id="z-wr-samplebox" style="display:none;margin-top:10px"></div><div id="z-wr-res"></div></div>';
     }
     if (showListening && listening.length) {
+      var zaudio = (window.CET4_ZAUDIO || {})[p.id];
       html += '<div class="card section-card"><h2>Part II　听力（' + listening.length + ' 题）</h2>';
-      if (p.listeningUrl) html += '<div class="info">🎧 在线收听本套听力（含时间轴）：<a href="' + esc(p.listeningUrl) + '" target="_blank" rel="noopener">点击打开</a></div>';
+      if (zaudio) {
+        html += '<audio controls preload="none" id="za" style="width:100%" src="' + esc(zaudio) + '"></audio>' +
+          (p.listeningUrl ? '<div class="muted" style="margin:6px 0">音频加载不出时：<a href="' + esc(p.listeningUrl) + '" target="_blank" rel="noopener">在线收听</a></div>' : "");
+      } else if (p.listeningUrl) {
+        html += '<div class="info">🎧 本套听力音频：<a href="' + esc(p.listeningUrl) + '" target="_blank" rel="noopener">点击在线收听</a></div>';
+      }
       listening.forEach(function (q) { html += mcq(q); });
       html += "</div>";
     }
