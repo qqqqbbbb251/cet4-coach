@@ -1679,6 +1679,31 @@
     openView("dash");
   }
 
+  /* ---------- 数据导入 / 导出 ---------- */
+  function openDataIO() {
+    var mask = document.createElement("div");
+    mask.className = "modal-mask";
+    mask.innerHTML = '<div class="modal"><h2>数据导入 / 导出</h2>' +
+      '<div class="info">导出：点「导出」生成 JSON，复制备份。导入：把 JSON 粘贴进文本框，点「导入并合并」（作文/翻译记录与考试成绩会追加，不影响其它数据）。</div>' +
+      '<textarea id="io-text" rows="10" style="font-family:monospace;font-size:12px" placeholder="在此粘贴要导入的 JSON…"></textarea>' +
+      '<div class="row" style="margin-top:10px"><button class="btn" id="io-exp" style="flex:1">导出当前</button>' +
+      '<button class="btn outline" id="io-imp" style="flex:1">导入并合并</button></div>' +
+      '<div id="io-msg"></div>' +
+      '<div class="row" style="margin-top:16px"><button class="btn ghost block" id="io-close">关闭</button></div></div>';
+    document.body.appendChild(mask);
+    var ta = document.getElementById("io-text");
+    document.getElementById("io-close").onclick = function () { document.body.removeChild(mask); };
+    document.getElementById("io-exp").onclick = function () { ta.value = JSON.stringify({ records: getRecords(), exams: examList() }, null, 1); ta.select(); };
+    document.getElementById("io-imp").onclick = function () {
+      try {
+        var obj = JSON.parse(ta.value);
+        if (obj.records) { var l = getRecords(); obj.records.forEach(function (r) { if (!l.some(function (x) { return String(x.id) === String(r.id); })) l.push(r); }); saveStore("cet4_records", l); }
+        if (obj.exams) { var e = examList(); obj.exams.forEach(function (x) { e.push(x); }); saveStore("cet4_exam", e); }
+        document.getElementById("io-msg").innerHTML = '<div class="info">导入成功：作文/翻译记录 ' + getRecords().length + " 条，考试 " + examList().length + " 条。</div>";
+      } catch (err) { document.getElementById("io-msg").innerHTML = '<div class="info warn">导入失败：' + esc(err.message) + "</div>"; }
+    };
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -1692,6 +1717,7 @@
       '<div class="row"><button class="btn" id="set-save" style="flex:1">保存</button>' +
       '<button class="btn outline" id="set-test" style="flex:1">测试连接</button></div>' +
       '<div id="set-msg"></div>' +
+      '<button class="btn outline block" id="set-data" style="margin-top:12px">数据导入 / 导出</button>' +
       '<div class="row" style="margin-top:16px"><button class="btn ghost block" id="set-close">关闭</button></div></div>';
     document.body.appendChild(mask);
     function close() { document.body.removeChild(mask); }
@@ -1701,6 +1727,8 @@
       setSettings({ apiKey: document.getElementById("set-key").value.trim(), baseUrl: document.getElementById("set-base").value.trim() || DEFAULTS.baseUrl, model: document.getElementById("set-model").value.trim() || DEFAULTS.model });
       toast("已保存"); close(); openView(currentView);
     };
+    document.getElementById("set-msg").innerHTML = "";
+    document.getElementById("set-data").onclick = openDataIO;
     document.getElementById("set-test").onclick = function () {
       var key = document.getElementById("set-key").value.trim();
       if (!key) { toast("请先填写 API Key"); return; }
