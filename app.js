@@ -230,7 +230,9 @@
       { key: "qfav", t: "收藏题目", d: "收藏的真题题目 · 集中复习", ic: "☆", c: "#6A1B9A" },
       { key: "roots", t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测，科学记词", ic: "根", c: "#00838F" },
       { key: "eztor", t: "原创模拟", d: "2 套原创模拟卷 · 55 题含答案解析", ic: "拟", c: "#6A1B9A" },
-      { key: "links", t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" }
+      { key: "links", t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" },
+      { key: "yati", t: "押题卷", d: "11 套押题/模拟卷 · 试卷 PDF + 听力音频", ic: "押", c: "#AD1457" },
+      { key: "report", t: "学习报告", d: "专属学习报告 · 可保存为图片", ic: "报", c: "#0277BD" }
     ];
     var html = '<div class="page">';
     html += '<div class="hero"><h1>大学英语四级 · 备考</h1><p>单词 · 阅读 · 听力 · 作文 · 翻译，一站式备考。</p>' +
@@ -1240,6 +1242,96 @@
     main.innerHTML = html;
   }
 
+  /* ---------- 押题卷 / 模拟卷 ---------- */
+  function renderYatiList() {
+    var list = window.CET4_PAPERS || [];
+    listPage("押题卷 / 模拟卷（" + list.length + " 套）", list, function (p, i) {
+      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#AD14571f;color:#AD1457">押</div>' +
+        '<div><h3>' + esc(p.title) + "</h3><p>试卷 PDF + 听力音频</p></div>" +
+        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+    }, renderYatiDetail);
+  }
+  function renderYatiDetail(p) {
+    main.innerHTML = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(p.title) + "</div>" +
+      '<div class="card"><div class="info">📄 试卷与答案解析都在 PDF 里：<a href="' + esc(p.pdf) + '" target="_blank" rel="noopener">打开 / 下载试卷 PDF</a></div>' +
+      '<div style="margin-top:12px"><audio controls preload="none" style="width:100%" src="' + esc(p.audio) + '"></audio></div>' +
+      '<div class="muted" style="margin-top:8px">听力音频已压缩，便于在线播放；完整试卷（即答案）见上方 PDF。</div></div></div>';
+    document.getElementById("backslot").appendChild(backBar("返回", renderYatiList));
+  }
+
+  /* ---------- 专属学习报告 ---------- */
+  function reportData() {
+    var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
+    var acc = p.a ? Math.round(p.c / p.a * 100) : 0;
+    var est = p.a ? Math.min(710, Math.round(p.c / p.a * 497 + 128)) : 0;
+    var wrong = Object.keys(store("cet4_wrong", {})).length;
+    var qfav = Object.keys(store("cet4_qfav", {})).length;
+    var fav = Object.keys(getFav()).length;
+    var plan = store("cet4_plan", {});
+    function doneN(k) { var r = plan[k]; if (!r) return 0; var n = 0; for (var i in r) if (r[i]) n++; return n; }
+    var checkin = 0; for (var k in plan) if (doneN(k) >= 3) checkin++;
+    var dd = new Date(), streak = 0;
+    function key(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+    for (; ;) { if (doneN(key(dd)) >= 3) { streak++; dd.setDate(dd.getDate() - 1); } else break; }
+    var days = Math.max(0, Math.ceil((new Date("2026-12-12T09:00:00") - new Date()) / 86400000));
+    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", obj: "练习" };
+    var types = p.types || {}, weak = null, weakR = 101;
+    for (var t in types) { var x = types[t]; if (x.a >= 3) { var rr = x.c / x.a * 100; if (rr < weakR) { weakR = rr; weak = typeNames[t] || t; } } }
+    return { a: p.a, c: p.c, acc: acc, est: est, wrong: wrong, qfav: qfav, fav: fav, checkin: checkin, streak: streak, days: days, types: types, typeNames: typeNames, weak: weak, weakR: Math.round(weakR < 101 ? weakR : 0) };
+  }
+  function renderReport() {
+    var r = reportData();
+    var html = '<div class="page"><div class="hero"><h1>学习报告</h1><p>距四级考试还有 ' + r.days + " 天 · 已打卡 " + r.checkin + " 天 · 连续 " + r.streak + " 天</p></div>" +
+      '<div class="stat-row">' +
+      '<div class="stat"><div class="n">' + r.a + '</div><div class="l">已做题</div></div>' +
+      '<div class="stat"><div class="n">' + r.c + '</div><div class="l">答对</div></div>' +
+      '<div class="stat"><div class="n">' + r.acc + '%</div><div class="l">正确率</div></div>' +
+      '<div class="stat"><div class="n">' + (r.est || "—") + '</div><div class="l">参考估分</div></div>' +
+      '</div>' +
+      '<div class="card"><div class="section-title" style="margin-top:0">分题型正确率</div>';
+    var keys = Object.keys(r.types).filter(function (k) { return r.types[k].a > 0; });
+    if (!keys.length) html += '<div class="muted">还没有做题数据，快去真题 / 练习刷几题吧。</div>';
+    keys.forEach(function (k) { var x = r.types[k], rr = Math.round(x.c / x.a * 100); html += '<div class="between" style="margin:6px 0"><span>' + (r.typeNames[k] || k) + '</span><span class="muted">' + x.c + "/" + x.a + " · " + rr + '%</span></div><div class="progress"><i style="width:' + rr + '%"></i></div>'; });
+    html += "</div><div class=\"stat-row\">" +
+      '<div class="stat"><div class="n">' + r.wrong + '</div><div class="l">错题</div></div>' +
+      '<div class="stat"><div class="n">' + r.qfav + '</div><div class="l">收藏题</div></div>' +
+      '<div class="stat"><div class="n">' + r.fav + '</div><div class="l">生词</div></div></div>';
+    html += '<div class="info">' + (r.a ? ("提升建议：" + (r.weak ? ("你的弱项是「" + r.weak + "」（正确率 " + r.weakR + "%），建议专项突破，并复习错题本。") : "各方面都不错，继续保持，多刷真题套卷。")) : "开始做题后，这里会给出针对性建议。") + "</div>";
+    html += '<button class="btn block" id="rep-save">保存报告为图片</button></div>';
+    main.innerHTML = html;
+    document.getElementById("rep-save").onclick = function () { exportReportImage(r); };
+  }
+  function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function exportReportImage(r) {
+    var W = 900, H = 1200, cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    var g = cv.getContext("2d");
+    var F = '"Microsoft YaHei", "PingFang SC", sans-serif';
+    g.fillStyle = "#F4F5FA"; g.fillRect(0, 0, W, H);
+    g.fillStyle = "#3949AB"; g.fillRect(0, 0, W, 220);
+    g.fillStyle = "#fff"; g.font = "bold 52px " + F; g.fillText("四级备考 · 学习报告", 60, 110);
+    g.font = "28px " + F; g.fillText(new Date().toLocaleDateString() + " · 距考试 " + r.days + " 天 · 连续打卡 " + r.streak + " 天", 60, 170);
+    var stats = [["已做题", r.a], ["答对", r.c], ["正确率", r.acc + "%"], ["参考估分", (r.est || "—")]];
+    var x0 = 60, y0 = 280, bw = (W - 120 - 3 * 24) / 4, bh = 150;
+    stats.forEach(function (s, i) { var x = x0 + i * (bw + 24);
+      g.fillStyle = "#fff"; roundRect(g, x, y0, bw, bh, 16); g.fill();
+      g.fillStyle = "#3949AB"; g.font = "bold 52px " + F; g.textAlign = "center"; g.fillText(String(s[1]), x + bw / 2, y0 + 80);
+      g.fillStyle = "#6b7280"; g.font = "24px " + F; g.fillText(s[0], x + bw / 2, y0 + 122); g.textAlign = "left"; });
+    var y = y0 + bh + 70;
+    g.fillStyle = "#1c1c22"; g.font = "bold 34px " + F; g.fillText("分题型正确率", 60, y); y += 52;
+    var keys = Object.keys(r.types).filter(function (k) { return r.types[k].a > 0; });
+    if (!keys.length) { g.fillStyle = "#6b7280"; g.font = "28px " + F; g.fillText("暂无数据", 60, y); y += 50; }
+    keys.forEach(function (k) { var x = r.types[k], rr = Math.round(x.c / x.a * 100);
+      g.fillStyle = "#1c1c22"; g.font = "28px " + F; g.fillText(r.typeNames[k] || k, 60, y);
+      g.fillStyle = "#6b7280"; g.textAlign = "right"; g.fillText(x.c + "/" + x.a + "  " + rr + "%", W - 60, y); g.textAlign = "left";
+      g.fillStyle = "#e5e7f2"; roundRect(g, 60, y + 14, W - 120, 14, 7); g.fill();
+      g.fillStyle = "#3949AB"; roundRect(g, 60, y + 14, (W - 120) * rr / 100, 14, 7); g.fill(); y += 74; });
+    y += 10; g.fillStyle = "#1c1c22"; g.font = "bold 30px " + F;
+    g.fillText("错题 " + r.wrong + " · 收藏题 " + r.qfav + " · 生词 " + r.fav + " · 打卡 " + r.checkin + " 天", 60, y); y += 60;
+    if (r.weak) { g.fillStyle = "#37474f"; g.font = "28px " + F; g.fillText("提升建议：弱项「" + r.weak + "」正确率 " + r.weakR + "%，建议专项突破并复习错题本。", 60, y); }
+    g.fillStyle = "#9aa0b4"; g.font = "22px " + F; g.fillText("四级备考 · CET-4 Coach", 60, H - 40);
+    var a = document.createElement("a"); a.download = "四级学习报告.png"; a.href = cv.toDataURL("image/png"); a.click();
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -1298,6 +1390,8 @@
     else if (name === "roots") renderRootsList();
     else if (name === "eztor") renderEztorList();
     else if (name === "links") renderLinks();
+    else if (name === "yati") renderYatiList();
+    else if (name === "report") renderReport();
   }
   document.getElementById("btn-home").onclick = function () { openView("home"); };
   document.getElementById("btn-settings").onclick = openSettings;
