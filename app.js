@@ -45,7 +45,7 @@
   var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
-  var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-chat" };
+  var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
   function getSettings() {
     try {
       var s = JSON.parse(localStorage.getItem("cet4_settings") || "{}");
@@ -83,6 +83,26 @@
       { role: "system", content: "你是一位大学英语四级（CET-4）翻译阅卷老师。请用简体中文批改学生的汉译英，语气专业、友善、具体。" },
       { role: "user", content: "请批改下面这篇汉译英。\n\n【中文原文】\n" + source + "\n\n【参考答案】\n" + reference + "\n\n【学生译文】\n" + user + "\n\n请严格按以下 Markdown 格式输出：\n## 得分\nX/15（四级翻译满分 15 分）\n\n## 总体评价\n（2-3 句）\n\n## 问题与修改\n- 原文片段 → 学生译文 → 建议译文\n\n## 参考译文\n" }
     ]);
+  }
+
+  function gradeImages(dataUrls, instruction, kind) {
+    var sys, ask;
+    if (kind === "essay") {
+      sys = "你是一位经验丰富的大学英语四级（CET-4）作文阅卷老师，能准确识别学生手写或拍摄的英文作文图片。请用简体中文批改。";
+      ask = "下面是我拍摄的英语作文。请先识别图片中的英文原文（用引用格式列出原文），然后批改。\n" + (instruction ? "【作文题目/要求】\n" + instruction + "\n" : "") +
+        "\n请严格按以下 Markdown 格式输出：\n## 识别到的原文\n（尽量准确转录）\n\n## 综合得分\nX/100（等级：优秀/良好/及格/不及格）\n\n## 总体评价\n\n## 优点\n- \n\n## 主要问题与修改建议\n- 原句：…… 建议：……\n\n## 参考范文（120-180 词）";
+    } else if (kind === "translation") {
+      sys = "你是一位大学英语四级（CET-4）翻译阅卷老师，能准确识别学生手写或拍摄的译文图片。请用简体中文批改。";
+      ask = "下面是我拍摄的汉译英译文。请先识别图片中的英文原文，再批改。\n" + (instruction ? "【中文原文/要求】\n" + instruction + "\n" : "") +
+        "\n请严格按以下 Markdown 格式输出：\n## 识别到的译文\n\n## 得分\nX/15\n\n## 总体评价\n\n## 问题与修改\n- 原文片段 → 你的译文 → 建议译文\n\n## 参考译文";
+    } else {
+      sys = "你是一位大学英语四级（CET-4）阅卷老师，能识别学生拍摄的答题卡/试卷图片。请用简体中文给出批改、评分与提升建议。";
+      ask = "下面是我拍摄的答题卡/试卷。请识别其中的作答内容，逐题判断对错，给出各部分得分与总分。" + (instruction ? "（参考答案/标准：" + instruction + "）" : "") +
+        "\n\n请按以下 Markdown 格式输出：\n## 识别到的作答\n\n## 各部分得分\n- 听力：\n- 阅读：\n- 翻译：\n- 写作：\n\n## 错因分析\n- \n\n## 提升建议\n- ";
+    }
+    var content = [{ type: "text", text: ask }];
+    dataUrls.forEach(function (u) { content.push({ type: "image_url", image_url: { url: u } }); });
+    return callAI([{ role: "system", content: sys }, { role: "user", content: content }]);
   }
 
   /* ---------- objective questions ---------- */
@@ -150,6 +170,8 @@
   function renderHome() {
     var ok = configured();
     var cards = [
+      { key: "plan", t: "学习计划", d: "距考试倒计时 · 每周主题 · 每日打卡进度", ic: "计", c: "#C62828" },
+      { key: "ocr", t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 解析 + 建议", ic: "拍", c: "#D81B60" },
       { key: "vocab", t: "单词检测", d: "4537 个四级词汇 · 单词卡 + 词义测验 + 重点词汇", ic: "Aa", c: "#3949AB" },
       { key: "reading", t: "阅读完形", d: "30 篇（选词填空/段落匹配/阅读）共 300 题 · 自动批改", ic: "阅", c: "#00897B" },
       { key: "listening", t: "听力练习", d: "24 套共 384 题 · 音频 + 原文 + 自动批改", ic: "听", c: "#F4511E" },
@@ -468,6 +490,132 @@
     });
   }
 
+  /* ---------- 拍照批改 ---------- */
+  function renderOcr() {
+    var kind = "essay";
+    var imgs = [];
+    var askLabel = { essay: "作文题目/要求（可留空）", translation: "中文原文/要求（可留空）", paper: "参考答案/标准（可留空）" };
+    var askPh = { essay: "粘贴作文题目或要求，帮助 AI 更准确批改", translation: "粘贴中文原文，帮助批改得更准确", paper: "粘贴选择题答案等标准，便于判分" };
+    main.innerHTML = '<div class="page"><div class="section-title">拍照批改</div>' +
+      '<div class="info">拍照或选择图片，上传<b>作文 / 译文 / 答题卡</b>，AI 会识别图中内容并给出批改、评分与提升建议。请先在设置里填好 DeepSeek API Key。</div>' +
+      '<div class="tabs" id="ocr-tabs"><button data-k="essay" class="active">作文</button><button data-k="translation">翻译</button><button data-k="paper">答题卡/试卷</button></div>' +
+      '<label class="fld"><span id="ocr-ask-label">' + askLabel[kind] + '</span><textarea id="ocr-instruction" rows="2" placeholder="' + askPh[kind] + '"></textarea></label>' +
+      '<div class="row"><label class="btn ghost" style="cursor:pointer">＋ 选择/拍摄图片<input type="file" id="ocr-file" accept="image/*" multiple capture="environment" style="display:none"></label><span class="muted" id="ocr-count">未选择图片</span></div>' +
+      '<div id="ocr-thumbs" class="row" style="margin-top:10px;flex-wrap:wrap"></div>' +
+      '<button class="btn block" id="ocr-go" style="margin-top:14px">开始识别并批改</button>' +
+      '<div id="ocr-result"></div></div>';
+
+    document.querySelectorAll("#ocr-tabs button").forEach(function (b) {
+      b.onclick = function () {
+        document.querySelectorAll("#ocr-tabs button").forEach(function (x) { x.classList.remove("active"); });
+        b.classList.add("active");
+        kind = b.getAttribute("data-k");
+        document.getElementById("ocr-ask-label").textContent = askLabel[kind];
+        document.getElementById("ocr-instruction").setAttribute("placeholder", askPh[kind]);
+      };
+    });
+
+    function drawThumbs() {
+      document.getElementById("ocr-count").textContent = imgs.length ? ("已选择 " + imgs.length + " 张") : "未选择图片";
+      document.getElementById("ocr-thumbs").innerHTML = imgs.map(function (u, i) {
+        return '<div style="position:relative"><img src="' + u + '" style="width:78px;height:78px;object-fit:cover;border-radius:10px;border:1px solid var(--line)"><button data-rm="' + i + '" style="position:absolute;top:-6px;right:-6px;background:#c62828;color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer">×</button></div>';
+      }).join("");
+      document.querySelectorAll("#ocr-thumbs [data-rm]").forEach(function (x) {
+        x.onclick = function () { imgs.splice(parseInt(x.getAttribute("data-rm"), 10), 1); drawThumbs(); };
+      });
+    }
+    document.getElementById("ocr-file").onchange = function (e) {
+      var files = Array.prototype.slice.call(e.target.files || []);
+      var pending = files.length;
+      if (!pending) return;
+      files.forEach(function (f) {
+        var fr = new FileReader();
+        fr.onload = function () { imgs.push(fr.result); if (--pending === 0) drawThumbs(); };
+        fr.onerror = function () { if (--pending === 0) drawThumbs(); };
+        fr.readAsDataURL(f);
+      });
+    };
+    document.getElementById("ocr-go").onclick = function () {
+      if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+      if (!imgs.length) { toast("请先选择或拍摄图片"); return; }
+      var btn = this, old = btn.textContent;
+      btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 识别批改中…（较慢，请稍候）';
+      var res = document.getElementById("ocr-result"); res.innerHTML = "";
+      gradeImages(imgs.slice(), document.getElementById("ocr-instruction").value.trim(), kind)
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; })
+        .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">失败：' + esc(e.message) + "</div>"; })
+        .then(function () { btn.disabled = false; btn.textContent = old; });
+    };
+  }
+
+  /* ---------- 学习计划 ---------- */
+  var PLAN = {
+    exam: "2026-12-12",
+    weeks: [
+      { r: "10.12–10.18", t: "第1周 · 打基础", d: "词汇 + 听力语感；每天背 30 词、做 1 套听力。" },
+      { r: "10.19–10.25", t: "第2周 · 词汇巩固", d: "继续背词；选词填空 + 段落匹配各 1 篇/天，弄懂空格填法。" },
+      { r: "10.26–11.01", t: "第3周 · 阅读提速", d: "长篇阅读 2 篇/天；语法专题过一遍（15 个专题）。" },
+      { r: "11.02–11.08", t: "第4周 · 听力攻坚", d: "听力精听 + 跟读；开始翻译练习，每天 1 篇。" },
+      { r: "11.09–11.15", t: "第5周 · 写作翻译", d: "作文 1 篇/天 + 积累句型；翻译对照参考译文修改。" },
+      { r: "11.16–11.22", t: "第6周 · 真题套卷①", d: "每 2 天 1 套真题（2015–2017），限时 + 订正错题。" },
+      { r: "11.23–11.29", t: "第7周 · 真题套卷②", d: "每 2 天 1 套真题（2018–2020），重点补弱项。" },
+      { r: "11.30–12.06", t: "第8周 · 真题套卷③", d: "每 2 天 1 套真题（2021–2024）；整理错题本。" },
+      { r: "12.07–12.12", t: "第9周 · 冲刺", d: "全真模拟（闭卷限时）；背作文模板；看错题本，保持手感。" }
+    ]
+  };
+  var DAILY = ["背 30 个单词", "做 1 套听力", "精读 1 篇阅读", "写/译 1 篇"];
+  function renderPlan() {
+    var exam = new Date(PLAN.exam + "T09:00:00");
+    var now = new Date();
+    var days = Math.max(0, Math.ceil((exam - now) / 86400000));
+    var todayKey = now.getFullYear() + "-" + ("0" + (now.getMonth() + 1)).slice(-2) + "-" + ("0" + now.getDate()).slice(-2);
+
+    function loadAll() { try { return JSON.parse(localStorage.getItem("cet4_plan") || "{}"); } catch (e) { return {}; } }
+    function saveAll(o) { localStorage.setItem("cet4_plan", JSON.stringify(o)); }
+    function streak(data) {
+      var s = 0, d = new Date(now);
+      for (; ;) {
+        var k = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
+        var rec = data[k];
+        if (rec && DAILY.filter(function (_, i) { return rec[i]; }).length >= 3) { s++; d.setDate(d.getDate() - 1); }
+        else break;
+      }
+      return s;
+    }
+
+    var data = loadAll();
+    var done = data[todayKey] || {};
+    var doneCount = DAILY.filter(function (_, i) { return done[i]; }).length;
+    var pct = Math.round(doneCount / DAILY.length * 100);
+    var st = streak(data);
+
+    var html = '<div class="page">' +
+      '<div class="hero"><h1>距四级考试还有 ' + days + ' 天</h1><p>考试日期：' + PLAN.exam + '（周六上午）</p><span class="pill">已连续打卡 ' + st + ' 天</span></div>' +
+      '<div class="section-title">今日打卡（' + todayKey + '）</div><div class="card">';
+    DAILY.forEach(function (t, i) {
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;font-size:15px"><input type="checkbox" data-day="' + i + '" ' + (done[i] ? "checked" : "") + ' style="width:20px;height:20px">' + esc(t) + "</label>";
+    });
+    html += '<div class="progress" style="margin-top:8px"><i style="width:' + pct + '%"></i></div><div class="muted">今日完成 ' + doneCount + "/" + DAILY.length + "</div></div>";
+
+    html += '<div class="section-title">9 周冲刺计划</div>';
+    PLAN.weeks.forEach(function (w) {
+      html += '<div class="card"><div class="between"><b>' + esc(w.t) + '</b><span class="muted">' + esc(w.r) + "</span></div>" +
+        '<div style="margin-top:6px" class="muted">' + esc(w.d) + "</div></div>";
+    });
+    html += '<div class="info" style="margin-top:8px">坚持比计划本身更重要：每天至少完成「背单词 + 听力 + 阅读」，周末加一套真题/作文。</div></div>';
+    main.innerHTML = html;
+
+    main.querySelectorAll("[data-day]").forEach(function (cb) {
+      cb.onchange = function () {
+        var d = loadAll();
+        d[todayKey] = d[todayKey] || {};
+        d[todayKey][parseInt(cb.getAttribute("data-day"), 10)] = cb.checked;
+        saveAll(d);
+        renderPlan();
+      };
+    });
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -508,6 +656,8 @@
   function openView(name) {
     currentView = name; window.scrollTo(0, 0);
     if (name === "home") renderHome();
+    else if (name === "plan") renderPlan();
+    else if (name === "ocr") renderOcr();
     else if (name === "vocab") renderVocab();
     else if (name === "reading") renderReadingList();
     else if (name === "listening") renderListeningList();
