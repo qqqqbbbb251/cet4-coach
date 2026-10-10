@@ -86,6 +86,12 @@
   function addExam(rec) { var l = examList(); l.push(rec); saveStore("cet4_exam", l); }
   function examAvg() { var l = examList(); if (!l.length) return 0; var s = 0; l.forEach(function (x) { s += x.est; }); return Math.round(s / l.length); }
   function getRecords(kind) { var l = store("cet4_records", []); return kind ? l.filter(function (x) { return x.kind === kind; }) : l; }
+  function recStats(kind) {
+    var l = getRecords(kind);
+    var ss = l.map(function (x) { return x.score != null ? x.score : parseScore(x.result, kind); }).filter(function (x) { return x != null; });
+    var avg = ss.length ? Math.round(ss.reduce(function (a, b) { return a + b; }, 0) / ss.length * 10) / 10 : 0;
+    return { n: l.length, avg: avg };
+  }
   function saveRecord(kind, title, input, result) {
     var l = store("cet4_records", []);
     var sc = parseScore(result, kind);
@@ -1446,6 +1452,13 @@
     if (!keys.length) html += '<div class="muted">还没有做题数据，快去真题 / 练习刷几题吧。</div>';
     keys.forEach(function (k) { var x = r.types[k], rr = Math.round(x.c / x.a * 100); html += '<div class="between" style="margin:6px 0"><span>' + (r.typeNames[k] || k) + '</span><span class="muted">' + x.c + "/" + x.a + " · " + rr + '%</span></div><div class="progress"><i style="width:' + rr + '%"></i></div>'; });
     html += "</div>";
+    var _es = recStats("essay"), _ts = recStats("translation");
+    if (_es.n || _ts.n) {
+      html += '<div class="card"><div class="section-title" style="margin-top:0">主观题（作文 / 翻译）</div>' +
+        (_es.n ? '<div class="between" style="margin:6px 0"><span>作文</span><span class="muted">' + _es.n + " 篇 · 平均 " + _es.avg + '/100</span></div>' : "") +
+        (_ts.n ? '<div class="between" style="margin:6px 0"><span>翻译</span><span class="muted">' + _ts.n + " 篇 · 平均 " + _ts.avg + '/15</span></div>' : "") +
+        "</div>";
+    }
     var _ex = r.exams || [];
     if (_ex.length) { html += '<div class="section-title">考试 / 模考（满分 710）</div><div class="card"><div class="between" style="margin:6px 0"><span>最近一次</span><b style="color:var(--primary)">' + _ex[_ex.length - 1].est + ' / 710</b></div><div class="between" style="margin:6px 0"><span>平均</span><b>' + r.examAvg + ' / 710</b></div><div class="between" style="margin:6px 0"><span>次数</span><b>' + _ex.length + '</b></div></div>'; }
     html += '<div class="stat-row">' +
@@ -1571,7 +1584,8 @@
     for (var t in types) { if (types[t].a >= 3) weak.push({ type: t, acc: Math.round(types[t].c / types[t].a * 100) }); }
     weak.sort(function (a, b) { return a.acc - b.acc; });
     var profile = "距离考试还有 " + planDays() + " 天；累计做题 " + p.a + " 道，总正确率 " + (p.a ? Math.round(p.c / p.a * 100) : 0) + "%。" +
-      "分题型正确率：" + JSON.stringify(types) + "。模考记录：" + JSON.stringify(mocks) + "。";
+      "分题型正确率：" + JSON.stringify(types) + "。考试/模考记录（710）：" + JSON.stringify(mocks) + "。" +
+      "作文：" + recStats("essay").n + " 篇·平均 " + recStats("essay").avg + "/100；翻译：" + recStats("translation").n + " 篇·平均 " + recStats("translation").avg + "/15。";
     var prompt = "学生情况：" + profile +
       "\n请制定一份个性化的四级备考计划：前约 1 个月每周 1 套真题，后 1 个月每周 2 套，临近考试每 2 天 1 套，中间穿插薄弱项攻坚；每天可学 3-4 小时。" +
       "请用中文 Markdown 输出，分周列出重点与每日时间分配，语言简洁可执行，并针对其薄弱题型给出具体建议。";
@@ -1624,6 +1638,13 @@
         var a = types[k].a, c = types[k].c, r = Math.round(c / a * 100);
         html += '<div class="between" style="margin:6px 0"><span>' + (typeNames[k] || k) + '</span><span class="muted">' + c + "/" + a + " · " + r + '%</span></div><div class="progress"><i style="width:' + r + '%"></i></div>';
       });
+      html += "</div>";
+    }
+    var es = recStats("essay"), ts = recStats("translation");
+    if (es.n || ts.n) {
+      html += '<div class="card"><div class="section-title" style="margin-top:0">主观题（作文 / 翻译）</div>';
+      if (es.n) html += '<div class="between" style="margin:6px 0"><span>作文</span><span class="muted">' + es.n + " 篇 · 平均 " + es.avg + "/100</span></div>";
+      if (ts.n) html += '<div class="between" style="margin:6px 0"><span>翻译</span><span class="muted">' + ts.n + " 篇 · 平均 " + ts.avg + "/15</span></div>";
       html += "</div>";
     }
     html += '<div class="grid">' +
