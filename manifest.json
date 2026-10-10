@@ -1,0 +1,9 @@
+{
+  "name": "四级备考 CET-4 Coach",
+  "short_name": "四级备考",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F4F5FA",
+  "theme_color": "#3949AB",
+  "icons": []
+}
