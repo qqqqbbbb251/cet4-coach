@@ -314,47 +314,6 @@
   }
 
   /* ---------- home ---------- */
-  function renderHomeOld() {
-    var ok = configured();
-    var cards = [
-      { key: "zhenti", t: "历年真题", d: "76 套真题（2015–2026）· 3325 题 · 含答案解析，自动判分", ic: "卷", c: "#B71C1C" },
-      { key: "plan", t: "学习计划", d: "距考试倒计时 · 每周主题 · 每日打卡进度", ic: "计", c: "#C62828" },
-      { key: "ocr", t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 解析 + 建议", ic: "拍", c: "#D81B60" },
-      { key: "vocab", t: "单词检测", d: "4537 个四级词汇 · 单词卡 + 词义测验 + 重点词汇", ic: "Aa", c: "#3949AB" },
-      { key: "reading", t: "阅读完形", d: "30 篇（选词填空/段落匹配/阅读）共 300 题 · 自动批改", ic: "阅", c: "#00897B" },
-      { key: "listening", t: "听力练习", d: "24 套共 384 题 · 音频 + 原文 + 自动批改", ic: "听", c: "#F4511E" },
-      { key: "writing", t: "作文批改", d: "12 道题目 · DeepSeek AI 评分与范文", ic: "文", c: "#8E24AA" },
-      { key: "translation", t: "翻译练习", d: "12 篇汉译英 · AI 批改与参考译文", ic: "译", c: "#5E35B1" },
-      { key: "grammar", t: "语法要点", d: "15 个核心语法专题 · 清单式复习", ic: "法", c: "#2E7D32" },
-      { key: "collocations", t: "常用短语", d: "126 个高频搭配 · 例句 + 记忆提示", ic: "搭", c: "#00838F" },
-      { key: "mocks", t: "全真模拟", d: "10 套完整模拟卷 · 听力/阅读/翻译/写作", ic: "卷", c: "#C62828" },
-      { key: "dash", t: "学习仪表盘", d: "做题统计 · 正确率趋势 · 参考估分", ic: "📊", c: "#0277BD" },
-      { key: "wrong", t: "错题本", d: "自动收集错题 · 智能复习 · 连对出库", ic: "错", c: "#C62828" },
-      { key: "fav", t: "生词本", d: "收藏的重点词汇", ic: "★", c: "#C8860A" },
-      { key: "qfav", t: "收藏题目", d: "收藏的真题题目 · 集中复习", ic: "☆", c: "#6A1B9A" },
-      { key: "roots", t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测，科学记词", ic: "根", c: "#00838F" },
-      { key: "eztor", t: "原创模拟", d: "2 套原创模拟卷 · 55 题含答案解析", ic: "拟", c: "#6A1B9A" },
-      { key: "links", t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" },
-      { key: "yati", t: "押题卷", d: "11 套押题/模拟卷 · 试卷 PDF + 听力音频", ic: "押", c: "#AD1457" },
-      { key: "report", t: "学习报告", d: "专属学习报告 · 可保存为图片", ic: "报", c: "#0277BD" }
-    ];
-    var html = '<div class="page">';
-    html += '<div class="hero"><h1>大学英语四级 · 备考</h1><p>单词 · 阅读 · 听力 · 作文 · 翻译，一站式备考。</p>' +
-      '<span class="pill">' + (ok ? "● AI 批改已就绪" : "○ AI 批改未配置") + "</span></div>";
-    if (!ok) html += '<div class="info warn">还没有配置 AI 接口。点右上角 ⚙ 填入 DeepSeek API Key 后，即可使用作文/翻译批改。其余功能均可离线使用。</div>';
-    html += '<div class="grid">';
-    cards.forEach(function (c) {
-      html += '<div class="fcard" data-go="' + c.key + '">' +
-        '<div class="ic" style="background:' + c.c + '1f;color:' + c.c + '">' + c.ic + "</div>" +
-        '<div class="txt"><h3>' + c.t + "</h3><p>" + c.d + "</p></div>" +
-        '<div class="arrow">›</div></div>';
-    });
-    html += "</div>";
-    html += '<p class="center muted" style="margin-top:24px">个人专属备考工具 · v2.0 · 数据来源：CET-4 Study Lab (MIT)</p>';
-    html += "</div>";
-    main.innerHTML = html;
-    main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
-  }
 
   var CATS = [
     { k: "words", t: "背单词", d: "背单词 · 复习 · 词书 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "review", "vtest", "vrecords", "roots", "fav"] },
@@ -484,36 +443,8 @@
     renderStudy(body);
   }
   function setTab(btn) { btn.parentNode.querySelectorAll("button").forEach(function (b) { b.classList.remove("active"); }); btn.classList.add("active"); }
-  function renderFlash(body) {
-    var words = bookWords(store("cet4_book", "all"));
-    if (!words.length) { body.innerHTML = '<div class="info">当前词书是空的，请到「词书」选择，或先收藏单词。</div>'; return; }
-    var bk = store("cet4_book", "all");
-    var bookLabel = { all: "四级核心", f5: "近5年高频", f10: "近10年高频", "基础": "难度·基础", "中级": "难度·中级", "较难": "难度·较难", "高阶": "难度·高阶", fav: "我的生词本" };
-    var idx = Math.floor(Math.random() * words.length), revealed = false;
-    function draw() {
-      var w = words[idx]; var mm = wmeta(w.w);
-      body.innerHTML =
-        '<div class="progress"><i style="width:' + ((idx + 1) / words.length * 100).toFixed(1) + '%"></i></div>' +
-        '<div class="between" style="margin:6px 0"><span class="muted">' + (bookLabel[bk] || "") + " · " + (idx + 1) + " / " + words.length + '</span><span><button class="star" id="say-btn">🔊</button><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></span></div>' +
-        '<div class="flash" id="flash-card"><div class="word">' + esc(w.w) + "</div>" +
-        (w.p ? '<div class="phon">/' + esc(w.p) + "/</div>" : "") +
-        '<div class="muted" style="font-size:12px;margin-top:8px">近5年×' + mm.f5 + " · 近10年×" + mm.f10 + " · 难度：" + (mm.d || "—") + "</div>" +
-        (revealed ? '<div class="mean">' + esc(w.m) + "</div>" : '<div class="hint">点击卡片显示释义</div>') + "</div>" +
-        '<div class="row" style="margin-top:16px">' +
-        '<button class="btn ghost" id="prev" style="flex:1">上一个</button>' +
-        '<button class="btn ghost" id="rnd" style="flex:1">随机</button>' +
-        '<button class="btn ghost" id="next" style="flex:1">下一个</button></div>';
-      document.getElementById("fav-btn").onclick = function () { var on = toggleFav(w.w, w.m); this.classList.toggle("on", on); toast(on ? "已收藏" : "已取消收藏"); };
-      document.getElementById("say-btn").onclick = function () { speak(w.w); };
-      document.getElementById("flash-card").onclick = function () { revealed = !revealed; draw(); };
-      document.getElementById("prev").onclick = function () { idx = (idx - 1 + words.length) % words.length; revealed = false; draw(); };
-      document.getElementById("next").onclick = function () { idx = (idx + 1) % words.length; revealed = false; draw(); };
-      document.getElementById("rnd").onclick = function () { idx = Math.floor(Math.random() * words.length); revealed = false; draw(); };
-    }
-    draw();
-  }
   function renderQuiz(body) {
-    var words = bookWords(store("cet4_book", "all"));
+    var words = bookWords(store("cet4_book", "cet4"));
     if (words.length < 4) { body.innerHTML = '<div class="info">当前词书单词太少（不足 4 个），无法测验，请换一本词书。</div>'; return; }
     var target, options, selected = null, score = 0, total = 0;
     function newQ() {
@@ -549,7 +480,7 @@
     newQ();
   }
   function renderSpell(body) {
-    var words = bookWords(store("cet4_book", "all"));
+    var words = bookWords(store("cet4_book", "cet4"));
     if (!words.length) { body.innerHTML = '<div class="info">当前词书为空，请到「词书」选择。</div>'; return; }
     var idx = Math.floor(Math.random() * words.length), done = null;
     function draw() {
@@ -575,7 +506,7 @@
     draw();
   }
   function renderEnQuiz(body) {
-    var words = bookWords(store("cet4_book", "all"));
+    var words = bookWords(store("cet4_book", "cet4"));
     if (words.length < 4) { body.innerHTML = '<div class="info">当前词书单词太少，无法测验。</div>'; return; }
     var target, options, selected = null, score = 0, total = 0;
     function newQ() {
@@ -627,28 +558,6 @@
     }
     document.getElementById("vip-search").oninput = function () { draw(this.value); };
     draw("");
-  }
-  function renderVocabBookOld(body) {
-    var books = [
-      { k: "f5", t: "近5年真题·高频", d: "近5年出现 ≥ 8 次" },
-      { k: "f10", t: "近10年真题·高频", d: "近10年出现 ≥ 15 次" },
-      { k: "all", t: "四级核心词汇", d: "全部 4537 词" },
-      { k: "基础", t: "难度 · 基础", d: "最常见的基础词" },
-      { k: "中级", t: "难度 · 中级", d: "" },
-      { k: "较难", t: "难度 · 较难", d: "" },
-      { k: "高阶", t: "难度 · 高阶", d: "较生僻词" },
-      { k: "fav", t: "我的生词本", d: "已收藏的单词" }
-    ];
-    var cur = store("cet4_book", "all");
-    body.innerHTML = '<p class="muted">选择一本词书，单词卡与词义测验只练这本书。</p>' + books.map(function (b) {
-      var n = bookWords(b.k).length;
-      return '<div class="list-item" data-book="' + b.k + '"><div class="ic" style="background:#3949AB1f;color:#3949AB">' + esc(b.t.charAt(0)) + '</div>' +
-        '<div><h3>' + esc(b.t) + (b.k === cur ? " ✓" : "") + "</h3><p>" + n + " 词" + (b.d ? " · " + b.d : "") + "</p></div>" +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
-    }).join("");
-    body.querySelectorAll("[data-book]").forEach(function (el) {
-      el.onclick = function () { saveStore("cet4_book", el.getAttribute("data-book")); toast("已选择词书"); document.getElementById("tab-card").click(); };
-    });
   }
 
   function renderVoaList() {
@@ -1217,105 +1126,8 @@
     ]
   };
   var DAILY = ["背 30 个单词", "做 1 套听力", "精读 1 篇阅读", "写/译 1 篇"];
-  function renderPlanOld() {
-    var exam = new Date(PLAN.exam + "T09:00:00");
-    var now = new Date();
-    var days = Math.max(0, Math.ceil((exam - now) / 86400000));
-    var todayKey = now.getFullYear() + "-" + ("0" + (now.getMonth() + 1)).slice(-2) + "-" + ("0" + now.getDate()).slice(-2);
-
-    function loadAll() { try { return JSON.parse(localStorage.getItem("cet4_plan") || "{}"); } catch (e) { return {}; } }
-    function saveAll(o) { localStorage.setItem("cet4_plan", JSON.stringify(o)); }
-    function streak(data) {
-      var s = 0, d = new Date(now);
-      for (; ;) {
-        var k = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
-        var rec = data[k];
-        if (rec && DAILY.filter(function (_, i) { return rec[i]; }).length >= 3) { s++; d.setDate(d.getDate() - 1); }
-        else break;
-      }
-      return s;
-    }
-
-    var data = loadAll();
-    var done = data[todayKey] || {};
-    var doneCount = DAILY.filter(function (_, i) { return done[i]; }).length;
-    var pct = Math.round(doneCount / DAILY.length * 100);
-    var st = streak(data);
-
-    var html = '<div class="page">' +
-      '<div class="hero"><h1>距四级考试还有 ' + days + ' 天</h1><p>考试日期：' + PLAN.exam + '（周六上午）</p><span class="pill">已连续打卡 ' + st + ' 天</span></div>' +
-      '<div class="section-title">今日打卡（' + todayKey + '）</div><div class="card">';
-    DAILY.forEach(function (t, i) {
-      html += '<label style="display:flex;align-items:center;gap:10px;padding:8px 0;font-size:15px"><input type="checkbox" data-day="' + i + '" ' + (done[i] ? "checked" : "") + ' style="width:20px;height:20px">' + esc(t) + "</label>";
-    });
-    html += '<div class="progress" style="margin-top:8px"><i style="width:' + pct + '%"></i></div><div class="muted">今日完成 ' + doneCount + "/" + DAILY.length + "</div></div>";
-
-    html += '<div class="section-title">9 周冲刺计划</div>';
-    PLAN.weeks.forEach(function (w) {
-      html += '<div class="card"><div class="between"><b>' + esc(w.t) + '</b><span class="muted">' + esc(w.r) + "</span></div>" +
-        '<div style="margin-top:6px" class="muted">' + esc(w.d) + "</div></div>";
-    });
-    html += '<div class="info" style="margin-top:8px">坚持比计划本身更重要：每天至少完成「背单词 + 听力 + 阅读」，周末加一套真题/作文。</div></div>';
-    main.innerHTML = html;
-
-    main.querySelectorAll("[data-day]").forEach(function (cb) {
-      cb.onchange = function () {
-        var d = loadAll();
-        d[todayKey] = d[todayKey] || {};
-        d[todayKey][parseInt(cb.getAttribute("data-day"), 10)] = cb.checked;
-        saveAll(d);
-        renderPlan();
-      };
-    });
-  }
 
   /* ---------- 仪表盘 ---------- */
-  function renderDashboardOld() {
-    var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
-    var acc = p.a ? Math.round(p.c / p.a * 100) : 0;
-    var est = p.a ? Math.min(710, Math.round(p.c / p.a * 497 + 128)) : 0;
-    var days = [];
-    for (var i = 6; i >= 0; i--) {
-      var d = new Date(); d.setDate(d.getDate() - i);
-      var k = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
-      days.push({ k: k.slice(5), v: p.days[k] || { a: 0, c: 0 } });
-    }
-    var maxa = Math.max(1, Math.max.apply(null, days.map(function (x) { return x.v.a; })));
-    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", obj: "练习" };
-    var wrongN = Object.keys(store("cet4_wrong", {})).length;
-    var favN = Object.keys(getFav()).length;
-
-    var html = '<div class="page"><div class="section-title">学习仪表盘</div>' +
-      '<div class="stat-row">' +
-      '<div class="stat"><div class="n">' + p.a + '</div><div class="l">已做题数</div></div>' +
-      '<div class="stat"><div class="n">' + p.c + '</div><div class="l">答对</div></div>' +
-      '<div class="stat"><div class="n">' + acc + '%</div><div class="l">正确率</div></div>' +
-      '<div class="stat"><div class="n">' + (est || "—") + '</div><div class="l">参考估分 /710</div></div>' +
-      '</div>' +
-      '<div class="card"><div class="section-title" style="margin-top:0">近 7 天做题量</div><div class="bars">';
-    days.forEach(function (x) {
-      var h = Math.round(x.v.a / maxa * 100);
-      html += '<div class="bb"><div class="b" style="height:' + h + '%"></div><div class="d">' + x.k + "</div></div>";
-    });
-    html += "</div></div>";
-    var types = p.types || {};
-    var tkeys = Object.keys(types).filter(function (k) { return types[k].a > 0; });
-    if (tkeys.length) {
-      html += '<div class="card"><div class="section-title" style="margin-top:0">分题型正确率</div>';
-      tkeys.forEach(function (k) {
-        var a = types[k].a, c = types[k].c, r = Math.round(c / a * 100);
-        html += '<div class="between" style="margin:6px 0"><span>' + (typeNames[k] || k) + '</span><span class="muted">' + c + "/" + a + " · " + r + '%</span></div><div class="progress"><i style="width:' + r + '%"></i></div>';
-      });
-      html += "</div>";
-    }
-    html += '<div class="grid">' +
-      '<div class="fcard" data-go="wrong"><div class="ic" style="background:#C628281f;color:#C62828">错</div><div class="txt"><h3>错题本</h3><p>' + wrongN + " 道错题 · 智能复习</p></div><div class=\"arrow\">›</div></div>" +
-      '<div class="fcard" data-go="fav"><div class="ic" style="background:#F6B93B1f;color:#C8860A">★</div><div class="txt"><h3>生词本</h3><p>' + favN + ' 个收藏单词</p></div><div class="arrow">›</div></div>' +
-      "</div>" +
-      '<p class="center muted" style="margin-top:16px">估分按客观题正确率粗略折算，仅供参考。</p></div>';
-    main.innerHTML = html;
-    main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
-  }
 
   /* ---------- 错题本 ---------- */
   function renderWrongBook() {
@@ -1344,45 +1156,6 @@
     }
   }
 
-  function renderWrongQuizOld() {
-    var w = store("cet4_wrong", {});
-    var items = Object.keys(w).map(function (k) { return w[k]; });
-    if (!items.length) { toast("错题本是空的"); return; }
-    items = shuffle(items).slice(0, 20);
-    var html = '<div class="page"><div id="backslot"></div><div class="section-title">智能复习（' + items.length + ' 题）</div><div class="card section-card">';
-    items.forEach(function (q, i) {
-      html += '<div class="zq" data-kind="mcq" data-ans="' + A2I(q.answer) + '" data-key="' + esc(q.key) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + (i + 1) + ". " + esc(q.stem || ("第" + q.qno + "题")) + "</div>";
-      (q.options || []).forEach(function (o, oi) {
-        html += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(stripA(o)) + "</span></div>";
-      });
-      html += "</div>";
-    });
-    html += '<button class="btn block submit-btn">提交</button></div></div>';
-    main.innerHTML = html;
-    document.getElementById("backslot").appendChild(backBar("返回", renderWrongBook));
-    var submitted = false;
-    main.querySelectorAll(".opt").forEach(function (el) {
-      el.onclick = function () { if (submitted) return; var q = el.closest(".zq"); q.querySelectorAll(".opt").forEach(function (x) { x.classList.remove("sel"); }); el.classList.add("sel"); };
-    });
-    main.querySelector(".submit-btn").onclick = function () {
-      if (submitted) return;
-      submitted = true;
-      var c = 0, t = 0;
-      main.querySelectorAll(".zq").forEach(function (q) {
-        t++;
-        var ans = parseInt(q.getAttribute("data-ans"), 10), sel = q.querySelector(".opt.sel"), ok = false;
-        q.querySelectorAll(".opt").forEach(function (o) { o.classList.add("locked"); var oi = parseInt(o.getAttribute("data-oi"), 10); if (oi === ans) o.classList.add("correct"); else if (sel && o === sel) o.classList.add("wrong"); });
-        ok = sel && parseInt(sel.getAttribute("data-oi"), 10) === ans;
-        if (ok) { c++; removeWrong(q.getAttribute("data-key")); }
-        recordAnswer("review", ok);
-        var exp = q.getAttribute("data-exp");
-        if (exp) { var kw = []; try { kw = JSON.parse(q.getAttribute("data-kw") || "[]"); } catch (e) { } var d = document.createElement("div"); d.className = "explain"; d.innerHTML = "<b>解析：</b>" + hiExp(exp, kw); q.appendChild(d); }
-      });
-      toast("答对 " + c + " / " + t + "，答对的已移出错题本");
-      this.textContent = "完成";
-      this.disabled = true;
-    };
-  }
 
   /* ---------- 生词本 ---------- */
   function renderFavList() {
@@ -1868,58 +1641,6 @@
   }
 
   /* ---------- 背单词（百词斩式） ---------- */
-  function renderStudyOld(body) {
-    var words = bookWords(store("cet4_book", "cet4"));
-    if (!words.length) { body.innerHTML = '<div class="info">当前词书为空，请到「词书」选择。</div>'; return; }
-    var spell = store("cet4_spellmode", false);
-    var order = shuffle(words.slice()).slice(0, 20);
-    var idx = 0, ok = 0, no = 0, review = [];
-    function draw() {
-      if (idx >= order.length) {
-        body.innerHTML = '<div class="card" style="text-align:center"><h2>本组完成 🎉</h2><p class="muted">认识 ' + ok + " · 不认识 " + no + "</p>" +
-          '<div class="row" style="justify-content:center;margin-top:10px">' + (review.length ? '<button class="btn" id="st-review">复习不认识的（' + review.length + '）</button>' : "") +
-          '<button class="btn ghost" id="st-next">再来一组</button></div></div>';
-        var rv = document.getElementById("st-review");
-        if (rv) rv.onclick = function () { order = review.slice(); idx = 0; ok = 0; no = 0; review = []; draw(); };
-        document.getElementById("st-next").onclick = function () { renderStudy(body); };
-        return;
-      }
-      var w = order[idx], mm = wmeta(w.w);
-      body.innerHTML = '<div class="between"><span class="muted">背单词 · ' + (idx + 1) + " / " + order.length + " · 认识 " + ok + '</span>' +
-        '<label class="muted" style="cursor:pointer"><input type="checkbox" id="st-spell" ' + (spell ? "checked" : "") + "> 边背边拼写</label></div>" +
-        '<div class="progress"><i style="width:' + (idx / order.length * 100) + '%"></i></div>' +
-        '<div class="flash" id="st-card"><div class="word">' + esc(w.w) + "</div>" + (w.p ? '<div class="phon">/' + esc(w.p) + "/</div>" : "") +
-        '<div class="muted" style="font-size:12px;margin-top:8px">近5年×' + mm.f5 + " · 难度：" + (mm.d || "—") + "</div></div>" +
-        '<div id="st-body"><button class="btn block" id="st-show">显示释义</button></div>';
-      document.getElementById("st-spell").onchange = function () { saveStore("cet4_spellmode", this.checked); spell = this.checked; showMeaning(); };
-      document.getElementById("st-show").onclick = showMeaning;
-      document.getElementById("st-card").onclick = showMeaning;
-      function showMeaning() {
-        var ex = exampleOf(w.w);
-        document.getElementById("st-body").innerHTML =
-          '<div class="card"><div style="font-size:18px;line-height:1.6">' + esc(w.m) + "</div>" +
-          (ex ? '<div class="muted" style="margin-top:8px">例：' + esc(ex) + "</div>" : "") +
-          (spell ? '<input type="text" id="st-in" placeholder="拼写该单词…" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:10px">' : "") +
-          '<div class="row" style="margin-top:12px"><button class="btn ghost" id="st-no" style="flex:1">不认识</button><button class="btn" id="st-yes" style="flex:1">认识</button></div></div>';
-        document.getElementById("st-no").onclick = function () { assess(false); };
-        document.getElementById("st-yes").onclick = function () {
-          if (spell && document.getElementById("st-in").value.trim().toLowerCase() !== w.w.toLowerCase()) { toast("拼写不正确"); return; }
-          assess(true);
-        };
-        if (spell) document.getElementById("st-in").focus();
-      }
-      function assess(known) {
-        var log = getVocabLog();
-        var d = todayKey(); log.days[d] = (log.days[d] || 0) + 1; log.total = (log.total || 0) + 1;
-        log.learned[w.w] = known ? "k" : "u"; saveVocabLog(log);
-        recordAnswer("vocab", known);
-        srsUpdate(w.w, w.m, known);
-        if (known) ok++; else { no++; review.push(w); }
-        idx++; draw();
-      }
-    }
-    draw();
-  }
   function renderVocabBook(body) {
     var cur = store("cet4_book", "cet4");
     var nosimple = store("cet4_nosimple", false);

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>selftest</title>
+</head>
+<body>
+<header id="appbar">
+  <div class="bar-inner">
+    <button id="btn-home" class="brand">四级备考 · CET-4</button>
+    <div class="bar-actions">
+      <button id="btn-dash" class="icon-btn" aria-label="仪表盘"></button>
+      <button id="btn-theme" class="icon-btn" aria-label="深色模式"></button>
+      <button id="btn-settings" class="icon-btn" aria-label="设置"></button>
+    </div>
+  </div>
+</header>
+<main id="main"></main>
+<div id="toast" class="toast"></div>
+<pre id="selftest-results"></pre>
+
+<script>
+  /* 跳过首屏引导，避免弹窗干扰测试 */
+  try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
+</script>
+<script src="data/data.js?v=6"></script>
+<script src="data/zhenti.js?v=6"></script>
+<script src="data/zaudio.js?v=6"></script>
+<script src="data/wordmeta.js?v=6"></script>
+<script src="data/roots.js?v=6"></script>
+<script src="data/eztor.js?v=6"></script>
+<script src="data/papers.js?v=6"></script>
+<script src="data/words_extra.js?v=6"></script>
+<script src="data/vocabtest.js?v=6"></script>
+<script src="data/wordcolloc.js?v=6"></script>
+<script src="data/voa.js?v=6"></script>
+<script src="app.js?v=6"></script>
+<script>
+(function () {
+  var out = [], pass = 0, fail = 0;
+  function ok(name, cond, extra) {
+    if (cond) { pass++; out.push("PASS " + name); }
+    else { fail++; out.push("FAIL " + name + (extra != null ? (" :: " + extra) : "")); }
+  }
+  function finish() {
+    document.getElementById("selftest-results").textContent = out.join("\n");
+    document.title = "SELFTEST " + (fail ? "FAIL" : "PASS") + " " + pass + "/" + (pass + fail) + (fail ? (" (" + out.filter(function (l) { return l.indexOf("FAIL") === 0; }).join(" | ") + ")") : "");
+  }
+
+  /* ---- 用假 fetch 拦截 AI 与词典请求，无需真实 Key ---- */
+  var origFetch = window.fetch;
+  window.fetch = function (url, opts) {
+    url = String(url);
+    if (url.indexOf("/chat/completions") >= 0) {
+      var body = JSON.stringify({ choices: [{ message: { content: "## 综合得分\n12/15\n\n## 总体评价\nselftest 假响应。" } }] });
+      return Promise.resolve({ ok: true, status: 200, text: function () { return Promise.resolve(body); } });
+    }
+    if (url.indexOf("dictionaryapi.dev") >= 0) {
+      return Promise.resolve({ ok: false, status: 404, json: function () { return Promise.resolve(null); } });
+    }
+    return origFetch ? origFetch.apply(window, arguments) : Promise.reject(new Error("no fetch"));
+  };
+
+  localStorage.setItem("cet4_settings", JSON.stringify({ apiKey: "test-key", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" }));
+  ["cet4_progress", "cet4_wrong", "cet4_srs", "cet4_records"].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { } });
+
+  function q(s, r) { return (r || document).querySelector(s); }
+  function qa(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+
+  /* ---- 1. 首页渲染 6 大分类 ---- */
+  q("#btn-home").click();
+  ok("home renders 6 categories", qa("#main [data-cat]").length === 6, "got " + qa("#main [data-cat]").length);
+
+  /* ---- 2. 每个分类下的每个模块都能打开且不报错 ---- */
+  var cats = ["words", "exam", "skill", "ai", "me", "more"];
+  cats.forEach(function (c) {
+    q("#btn-home").click();
+    var el = q('#main [data-cat="' + c + '"]');
+    ok("category " + c + " present", !!el);
+    if (!el) return;
+    el.click();
+    var mods = qa("#main [data-go]");
+    ok("category " + c + " has modules", mods.length > 0, "got " + mods.length);
+    mods.forEach(function (m) {
+      var key = m.getAttribute("data-go");
+      try {
+        q("#btn-home").click();
+        var cat = q('#main [data-cat="' + c + '"]'); if (cat) cat.click();
+        var mm = q('#main [data-go="' + key + '"]');
+        if (!mm) { ok("open " + key, false, "button missing"); return; }
+        mm.click();
+        ok("open " + key, true);
+      } catch (e) { ok("open " + key, false, String(e && e.message || e)); }
+    });
+  });
+
+  /* ---- 3. 背单词界面能渲染单词卡 ---- */
+  try {
+    q("#btn-home").click();
+    q('#main [data-cat="words"]').click();
+    q('#main [data-go="vocab"]').click();
+    ok("vocab study renders cards", qa("#vocab-body .card").length > 0);
+  } catch (e) { ok("vocab study renders cards", false, String(e)); }
+
+  /* ---- 4. AI 作文批改流程（假 fetch） ---- */
+  try {
+    q("#btn-home").click();
+    q('#main [data-cat="skill"]').click();
+    q('#main [data-go="writing"]').click();
+    var item = q('#main [data-idx="0"]');
+    ok("writing list has items", !!item);
+    item.click();
+    var ta = q("#wr-text");
+    ok("writing detail has textarea", !!ta);
+    ta.value = "With the rapid development of society, many people pay attention to education. It is important for us to study hard and never give up.";
+    q("#wr-grade").click();
+    setTimeout(function () {
+      var res = q("#wr-result .ai-result");
+      ok("AI essay grade rendered", !!res && /综合得分/.test(res.textContent));
+      finish();
+    }, 1200);
+  } catch (e) { ok("AI essay grade flow", false, String(e)); finish(); }
+})();
+</script>
+</body>
+</html>
