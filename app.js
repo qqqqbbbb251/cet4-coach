@@ -83,7 +83,7 @@
     return Math.min(710, Math.max(0, e));
   }
   function examList() { return store("cet4_exam", []); }
-  function addExam(rec) { var l = examList(); l.push(rec); saveStore("cet4_exam", l); }
+  function addExam(rec) { var l = examList(); if (l.some(function (x) { return x.date === rec.date && x.source === rec.source && x.est === rec.est; })) return; l.push(rec); saveStore("cet4_exam", l); }
   function examAvg() { var l = examList(); if (!l.length) return 0; var s = 0; l.forEach(function (x) { s += x.est; }); return Math.round(s / l.length); }
   function getRecords(kind) { var l = store("cet4_records", []); return kind ? l.filter(function (x) { return x.kind === kind; }) : l; }
   function recStats(kind) {
@@ -408,6 +408,7 @@
     document.getElementById("tab-spell").onclick = function () { setTab(this); renderSpell(body); };
     document.getElementById("tab-book").onclick = function () { setTab(this); renderVocabBook(body); };
     document.getElementById("tab-vip").onclick = function () { setTab(this); renderVipVocab(body); };
+    body.addEventListener("change", function (e) { if (e.target && e.target.id === "st-spell") { saveStore("cet4_spellmode", e.target.checked); renderStudy(body); } });
     renderStudy(body);
   }
   function setTab(btn) { btn.parentNode.querySelectorAll("button").forEach(function (b) { b.classList.remove("active"); }); btn.classList.add("active"); }
@@ -1698,6 +1699,7 @@
     var h = (t.listening && t.listening.c) || 0, ht = (t.listening && t.listening.a) || 0;
     var rc = ((t.cloze && t.cloze.c) || 0) + ((t.match && t.match.c) || 0) + ((t.reading && t.reading.c) || 0);
     var rt = ((t.cloze && t.cloze.a) || 0) + ((t.match && t.match.a) || 0) + ((t.reading && t.reading.a) || 0);
+    if (!h && !rc) { toast("还没有练习记录，先去做几道题吧"); return; }
     var essays = getRecords("essay"), trans = getRecords("translation");
     var e = essays.length ? essays[essays.length - 1] : null, tr = trans.length ? trans[trans.length - 1] : null;
     var wRaw = 0, hasW = false;
@@ -1728,7 +1730,7 @@
       try {
         var obj = JSON.parse(ta.value);
         if (obj.records) { var l = getRecords(); obj.records.forEach(function (r) { if (!l.some(function (x) { return String(x.id) === String(r.id); })) l.push(r); }); saveStore("cet4_records", l); }
-        if (obj.exams) { var e = examList(); obj.exams.forEach(function (x) { e.push(x); }); saveStore("cet4_exam", e); }
+        if (obj.exams) { obj.exams.forEach(function (x) { addExam(x); }); }
         document.getElementById("io-msg").innerHTML = '<div class="info">导入成功：作文/翻译记录 ' + getRecords().length + " 条，考试 " + examList().length + " 条。</div>";
       } catch (err) { document.getElementById("io-msg").innerHTML = '<div class="info warn">导入失败：' + esc(err.message) + "</div>"; }
     };
@@ -1871,7 +1873,6 @@
       });
       h += '<button class="btn block" id="learn-next">记住了，开始测验</button>';
       body.innerHTML = h;
-      document.getElementById("st-spell").onchange = function () { saveStore("cet4_spellmode", this.checked); renderStudy(body, preset); };
       document.getElementById("learn-next").onclick = function () { si++; step(); };
     }
     function quiz(g, kind) {
