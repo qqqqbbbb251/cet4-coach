@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   "use strict";
 
   var DATA = window.CET4_DATA || { words: [], vocabulary: [], reading: [], listening: [], translations: [], writing: [], collocations: [], grammar: [], mocks: [] };
@@ -754,7 +754,7 @@
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("wr-result"); res.innerHTML = "";
       gradeEssay(s.prompt, ta.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">提取到错词本</button></div>'; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>'; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -794,7 +794,7 @@
       var btn = this, old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("tr-result"); res.innerHTML = "";
       gradeTranslation(s.prompt, s.reference, input.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">提取到错词本</button></div>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -1118,7 +1118,7 @@
     var old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
     res.innerHTML = "";
     fn().then(function (md) {
-      res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>" + (kind ? '<div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">提取到错词本</button></div>' : "");
+      res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>" + (kind ? '<div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>' : "");
       if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; }
     })
       .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
@@ -2325,7 +2325,7 @@
     var a = getErrBook(); var t = todayKey();
     var due = a.filter(function (x) { return (x.due || "") <= t; }).length;
     var html = '<div class="page"><div class="section-title">错词本（' + a.length + '）</div>' +
-      '<div class="info">从你的作文/翻译批改里提取的错词与错搭配，按记忆曲线复习，改到不再犯。在批改结果处点「提取到错词本」即可加入。</div>' +
+      '<div class="info">从你的作文/翻译批改里提取的错词与错搭配，按记忆曲线复习，改到不再犯。在批改结果处点「一键加入错词本」即可加入。</div>' +
       '<div class="row" style="margin-bottom:12px"><button class="btn" id="eb-due">记忆曲线复习（到期 ' + due + '）</button><button class="btn ghost" id="eb-all">全部复习</button></div>' +
       '<div class="card"><div class="row"><input type="text" id="eb-w" placeholder="错的（词/短语）" style="flex:1"><input type="text" id="eb-c" placeholder="正确的" style="flex:1"><select id="eb-t" style="flex:0 0 96px"><option>拼写</option><option>搭配</option><option>语法</option><option>时态</option><option>介词</option><option>词汇</option></select></div><button class="btn block" id="eb-add" style="margin-top:8px">手动添加</button></div>';
     if (!a.length) html += '<div class="info">还没有条目。</div>';
@@ -2472,3 +2472,4 @@
   showWelcome();
   autoSync();
 })();
+

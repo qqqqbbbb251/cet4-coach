@@ -1,4 +1,4 @@
-const CACHE = "cet4-v3";
+const CACHE = "cet4-v4";
 const CORE = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
   "./data/data.js", "./data/zhenti.js", "./data/zaudio.js", "./data/wordmeta.js",
@@ -18,23 +18,21 @@ self.addEventListener("activate", function (e) {
   }).then(function () { return self.clients.claim(); }));
 });
 
+// 联网优先：在线永远取最新；离线时回退到缓存
 self.addEventListener("fetch", function (e) {
   var req = e.request;
   if (req.method !== "GET") return;
   var url = new URL(req.url);
-  if (url.origin !== location.origin) return; // 只处理本站资源（AI 请求等放行）
+  if (url.origin !== location.origin) return;
   e.respondWith(
-    caches.match(req).then(function (hit) {
-      if (hit) return hit;
-      return fetch(req).then(function (res) {
-        if (res && res.status === 200) {
-          var copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy).catch(function () { }); });
-        }
-        return res;
-      }).catch(function () {
-        return caches.match("./index.html");
-      });
+    fetch(req).then(function (res) {
+      if (res && res.status === 200) {
+        var copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(req, copy).catch(function () { }); });
+      }
+      return res;
+    }).catch(function () {
+      return caches.match(req).then(function (hit) { return hit || caches.match("./index.html"); });
     })
   );
 });
