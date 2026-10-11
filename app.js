@@ -83,7 +83,7 @@
     return Math.min(710, Math.max(0, e));
   }
   function examList() { return store("cet4_exam", []); }
-  function addExam(rec) { var l = examList(); if (l.some(function (x) { return x.date === rec.date && x.source === rec.source && x.est === rec.est; })) return; l.push(rec); saveStore("cet4_exam", l); }
+  function addExam(rec) { var l = examList(); if (l.some(function (x) { return x.date === rec.date && x.source === rec.source && x.est === rec.est; })) return; l.push(rec); saveStore("cet4_exam", l); autoSync(); }
   function examAvg() { var l = examList(); if (!l.length) return 0; var s = 0; l.forEach(function (x) { s += x.est; }); return Math.round(s / l.length); }
   function getRecords(kind) { var l = store("cet4_records", []); return kind ? l.filter(function (x) { return x.kind === kind; }) : l; }
   function recStats(kind) {
@@ -97,6 +97,7 @@
     var sc = parseScore(result, kind);
     l.push({ id: Date.now(), date: todayKey(), kind: kind, title: title || "", input: input || "", result: result || "", score: sc });
     saveStore("cet4_records", l);
+    autoSync();
   }
   function parseScore(md, kind) {
     if (!md) return null;
@@ -186,7 +187,9 @@
     if (c.key) { headers["apikey"] = c.key; headers["Authorization"] = "Bearer " + c.key; }
     return fetch(base + "/rest/v1/sync?select=*", { headers: headers })
       .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("读取失败 " + r.status + " " + t.slice(0, 120)); }); return r.json(); });
-  }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  }
+  var _lastAutoSync = 0;
+  function autoSync() { var c = syncCfg(); if (!c.url) return; var n = Date.now(); if (n - _lastAutoSync < 120000) return; _lastAutoSync = n; pushSync().catch(function () { }); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -1991,6 +1994,7 @@
       log.days[d] = (log.days[d] || 0) + allw.length; log.total = (log.total || 0) + allw.length;
       allw.forEach(function (w) { var ms = pass[w.w].a && pass[w.w].b && pass[w.w].s; log.learned[w.w] = ms ? "k" : "u"; srsUpdate(w.w, w.m, ms); });
       saveVocabLog(log);
+      autoSync();
       body.innerHTML = '<div class="card" style="text-align:center"><h2>本组完成 🎉</h2><p>掌握 ' + mastered.length + " / " + allw.length + "</p>" +
         (need.length ? '<div class="muted" style="margin-top:6px">待巩固：' + need.map(function (w) { return esc(w.w); }).join("、") + "</div>" : '<div class="muted">全部通过，太棒了！</div>') +
         '<div class="row" style="justify-content:center;margin-top:12px">' + (need.length ? '<button class="btn" id="st-review">复习待巩固（' + need.length + '）</button>' : "") + '<button class="btn ghost" id="st-next">再来一组</button></div></div>';
@@ -2094,7 +2098,7 @@
       '<div id="set-msg"></div>' +
       '<button class="btn outline block" id="set-data" style="margin-top:12px">数据导入 / 导出</button>' +
       '<div class="section-title" style="margin-top:14px">云同步（可选 · 用于远程监督）</div>' +
-      '<div class="info">配置后本机数据会上传到你的 Supabase，方便远程查看。地址＝Project URL，Key＝anon key，同步码＝她的名字（见下方说明）。</div>' +
+      '<div class="info">配置后本机数据会上传到你的 Supabase，方便远程查看。地址＝Project URL，Key＝anon key，同步码＝她的名字（见下方说明）。开启后**学习完会自动同步**。</div>' +
       '<label class="fld"><span>同步地址（Supabase Project URL）</span><input type="text" id="set-syncurl" value="' + esc(store("cet4_syncurl", "")) + '"></label>' +
       '<label class="fld"><span>Key（anon）</span><input type="text" id="set-synckey" value="' + esc(store("cet4_synckey", "")) + '"></label>' +
       '<label class="fld"><span>同步码 / 姓名</span><input type="text" id="set-syncname" value="' + esc(store("cet4_syncname", "学生")) + '"></label>' +
@@ -2170,4 +2174,5 @@
   applyTheme();
   openView("home");
   showWelcome();
+  autoSync();
 })();
