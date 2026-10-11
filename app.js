@@ -802,7 +802,7 @@
       var btn = this, old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("tr-result"); res.innerHTML = "";
       gradeTranslation(s.prompt, s.reference, input.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; attachDeepTranslate(res, s.prompt, s.reference, input.value.trim()); })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -1116,18 +1116,18 @@
       document.getElementById("z-tr-grade").onclick = function () {
         var ta = document.getElementById("z-tr");
         if (ta.value.trim().length < 2) { toast("请先写译文"); return; }
-        aiRun(this, document.getElementById("z-tr-res"), function () { return gradeTranslation(p.translation.prompt, p.translation.sample, ta.value.trim()); }, "translation", p.translation.prompt, ta.value.trim());
+        aiRun(this, document.getElementById("z-tr-res"), function () { return gradeTranslation(p.translation.prompt, p.translation.sample, ta.value.trim()); }, "translation", p.translation.prompt, ta.value.trim(), p.translation.sample);
       };
     }
   }
 
-  function aiRun(btn, res, fn, kind, title, input) {
+  function aiRun(btn, res, fn, kind, title, input, reference) {
     if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
     var old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
     res.innerHTML = "";
     fn().then(function (md) {
       res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>" + (kind ? '<div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>' : "");
-      if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; }
+      if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; if (kind === "translation" && reference) attachDeepTranslate(res, title, reference, input); }
     })
       .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
       .then(function () { btn.disabled = false; btn.textContent = old; });
@@ -2435,6 +2435,70 @@
         var c = store("cet4_dict", {}); c[w] = d; saveStore("cet4_dict", c); render(d);
       })
       .catch(function () { container.innerHTML = '<div class="muted" style="margin-top:8px">联网词典暂不可用（可先看搭配）。</div>'; });
+  }
+
+  /* ---------- 翻译·深度分析（逐句对照 + 高亮 + 精解） ---------- */
+  function deepTranslateAnalysis(source, reference, user) {
+    var prompt = "你是四级翻译阅卷老师。下面是中文原文、参考答案、学生译文。请把中文原文按句子拆分，逐句对照分析。\n" +
+      '只输出 JSON 对象：{"sentences":[{"zh":"中文原句","user":"学生对应的英文(可为空)","reference":"参考译文对应句","improved":"基于学生句子改进后的英文","issues":[{"type":"拼写|漏译|用词|语法|搭配|时态|介词","wrong":"出错或缺失的片段","correct":"正确或补充内容","note":"一句话说明"}]}]}\n' +
+      "要求：user 填学生实际写的英文；issues 里拼写/用词/语法/搭配/时态/介词类把 wrong 填学生写错的片段；漏译类把 wrong 填漏掉的中文意项、correct 填空。务必逐句一一对应。\n\n" +
+      "【中文原文】\n" + source + "\n【参考答案】\n" + reference + "\n【学生译文】\n" + user;
+    return callAI([{ role: "system", content: "只输出 JSON。" }, { role: "user", content: prompt }]).then(function (txt) { var m = txt.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : { sentences: [] }; });
+  }
+  function renderDeepTranslate(obj) {
+    var ss = (obj && obj.sentences) || [];
+    if (!ss.length) return '<div class="info">没有解析出句子。</div>';
+    var h = '<div class="info">逐句对照：<span class="hl-red" style="background:#ffcdd2;color:#b71c1c;padding:0 4px;border-radius:3px">红色</span> 为错误/缺失项；点每句「精解」看语法·用词·搭配详解。</div>';
+    ss.forEach(function (s, i) {
+      var usr = esc(s.user || "（未翻译）");
+      (s.issues || []).forEach(function (it) {
+        if (it.wrong && it.type !== "漏译") { var ew = esc(it.wrong); usr = usr.split(ew).join('<mark class="hl-red">' + ew + "</mark>"); }
+      });
+      var issues = (s.issues || []).map(function (it) {
+        var body = it.type === "漏译" ? ("漏译「" + esc(it.wrong) + "」→ " + esc(it.correct)) : (esc(it.wrong) + ' → <span style="color:#2e7d32">' + esc(it.correct) + "</span>");
+        return '<div class="muted" style="margin:2px 0">• <b>' + esc(it.type) + "</b>：" + body + (it.note ? "（" + esc(it.note) + "）" : "") + "</div>";
+      }).join("");
+      h += '<div class="card"><div class="stem">第 ' + (i + 1) + " 句</div>" +
+        '<div class="sent-zh">' + esc(s.zh) + "</div>" +
+        '<div style="margin-top:6px"><b>你的译文：</b>' + usr + "</div>" +
+        (issues ? '<div style="margin-top:6px">' + issues + "</div>" : "") +
+        (s.improved ? '<div style="margin-top:6px"><b>改进版：</b>' + esc(s.improved) + "</div>" : "") +
+        (s.reference ? '<div class="muted" style="margin-top:4px"><b>参考：</b>' + esc(s.reference) + "</div>" : "") +
+        '<button class="btn ghost small sens-explain" data-i="' + i + '" style="margin-top:8px">精解</button><div data-box="' + i + '"></div></div>';
+    });
+    return h;
+  }
+  function bindSentences(box, ss) {
+    box.querySelectorAll(".sens-explain").forEach(function (b) {
+      b.onclick = function () {
+        var i = parseInt(b.getAttribute("data-i"), 10), s = ss[i], cont = box.querySelector('[data-box="' + i + '"]');
+        cont.innerHTML = '<div class="muted">精解中…</div>';
+        explainSentence(s).then(function (md) { cont.innerHTML = '<div class="ai-result" style="margin-top:8px">' + mdToHtml(md) + "</div>"; b.remove(); })
+          .catch(function (e) { cont.innerHTML = '<div class="info warn">失败：' + esc(e.message) + "</div>"; });
+      };
+    });
+  }
+  function explainSentence(s) {
+    var p = "请详细讲解下面这一句英语翻译（四级水平）：\n中文原句：" + (s.zh || "") + "\n学生的英文：" + (s.user || "（空）") + "\n参考译文：" + (s.reference || "") + "\n改进版：" + (s.improved || "") +
+      "\n请从【语法结构】【用词选择】【固定搭配】【翻译技巧】四个角度逐点讲解，指出学生错误并给出更好的表达。中文作答、条理清晰。";
+    return callAI([{ role: "system", content: "你是四级英语老师，讲解细致、具体、可学会。" }, { role: "user", content: p }]);
+  }
+  function attachDeepTranslate(resEl, source, reference, userText) {
+    if (!source || !userText) return;
+    var wrap = document.createElement("div"); wrap.style.marginTop = "10px";
+    var btn = document.createElement("button"); btn.className = "btn block"; btn.textContent = "🔍 深度分析（逐句对照高亮）";
+    wrap.appendChild(btn); resEl.appendChild(wrap);
+    var box = document.createElement("div"); resEl.appendChild(box);
+    btn.onclick = function () {
+      if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+      box.innerHTML = '<div class="muted" style="margin-top:8px">逐句分析中…（较慢）</div>';
+      btn.disabled = true; btn.textContent = "分析中…";
+      deepTranslateAnalysis(source, reference, userText).then(function (obj) {
+        box.innerHTML = renderDeepTranslate(obj);
+        bindSentences(box, (obj && obj.sentences) || []);
+        btn.disabled = false; btn.textContent = "🔍 重新深度分析";
+      }).catch(function (e) { box.innerHTML = '<div class="info warn" style="margin-top:8px">失败：' + esc(e.message) + "</div>"; btn.disabled = false; btn.textContent = "🔍 深度分析（逐句对照高亮）"; });
+    };
   }
 
   /* ---------- settings ---------- */

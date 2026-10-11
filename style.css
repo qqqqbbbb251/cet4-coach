@@ -283,3 +283,9 @@ body.dark .opt.locked { opacity: 1; }
 .star.on { color: #f6b93b; }
 .wrong-item { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 12px; }
 .wrong-item .stem { font-weight: 600; margin-bottom: 8px; }
+
+/* deep translation analysis */
+mark.hl-red { background: #ffcdd2; color: #b71c1c; padding: 0 2px; border-radius: 3px; font-weight: 600; }
+.sent-zh { background: #f0f1f7; border-radius: 8px; padding: 10px 12px; }
+.sent-user mark { background: #ffcdd2; color: #b71c1c; }
+body.dark mark.hl-red { background: #7f1d1d; color: #ffd; }
