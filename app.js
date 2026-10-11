@@ -102,7 +102,7 @@
   function parseScore(md, kind) {
     if (!md) return null;
     var m;
-    if (kind === "essay") { m = md.match(/(\d{1,3})\s*\/\s*100/); if (m) return Math.min(100, parseInt(m[1], 10)); }
+    if (kind === "essay") { m = md.match(/(\d{1,2}(?:\.\d)?)\s*\/\s*15/); if (m) return Math.min(15, parseFloat(m[1])); m = md.match(/(\d{1,3})\s*\/\s*100/); if (m) return Math.round(parseInt(m[1], 10) * 0.15 * 10) / 10; }
     if (kind === "translation") { m = md.match(/(\d{1,2}(?:\.\d)?)\s*\/\s*15/); if (m) return Math.min(15, parseFloat(m[1])); }
     m = md.match(/得分[^\d]{0,6}(\d{1,3})/); if (m) return parseInt(m[1], 10);
     return null;
@@ -222,7 +222,7 @@
   function gradeEssay(direction, essay) {
     return callAI([
       { role: "system", content: "你是一位经验丰富的大学英语四级（CET-4）作文阅卷老师。请用简体中文批改学生的英语作文，语气专业、友善、具体。" },
-      { role: "user", content: "请批改下面这篇四级作文。\n\n【作文题目】\n" + direction + "\n\n【学生作文】\n" + essay + "\n\n请严格按以下 Markdown 格式输出：\n## 综合得分\nX/100（并给出等级：优秀/良好/及格/不及格）\n\n## 总体评价\n（2-3 句）\n\n## 优点\n- （至少 2 条）\n\n## 主要问题与修改建议\n- 原句：…… 建议：……\n\n## 参考范文（120-180 词）\n" }
+      { role: "user", content: "请批改下面这篇四级作文。\n\n【作文题目】\n" + direction + "\n\n【学生作文】\n" + essay + "\n\n请严格按以下 Markdown 格式输出：\n## 综合得分\nX/15（四级作文满分 15 分；等级：优秀 13-15 / 良好 10-12 / 及格 7-9 / 不及格 ≤6）\n\n## 总体评价\n（2-3 句）\n\n## 优点\n- （至少 2 条）\n\n## 主要问题与修改建议\n- 原句：…… 建议：……\n\n## 参考范文（120-180 词）\n" }
     ]);
   }
   function gradeTranslation(source, reference, user) {
@@ -493,7 +493,7 @@
       var w = words[idx]; var mm = wmeta(w.w);
       body.innerHTML =
         '<div class="progress"><i style="width:' + ((idx + 1) / words.length * 100).toFixed(1) + '%"></i></div>' +
-        '<div class="between" style="margin:6px 0"><span class="muted">' + (bookLabel[bk] || "") + " · " + (idx + 1) + " / " + words.length + '</span><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></div>' +
+        '<div class="between" style="margin:6px 0"><span class="muted">' + (bookLabel[bk] || "") + " · " + (idx + 1) + " / " + words.length + '</span><span><button class="star" id="say-btn">🔊</button><button class="star' + (getFav()[w.w] != null ? " on" : "") + '" id="fav-btn">★</button></span></div>' +
         '<div class="flash" id="flash-card"><div class="word">' + esc(w.w) + "</div>" +
         (w.p ? '<div class="phon">/' + esc(w.p) + "/</div>" : "") +
         '<div class="muted" style="font-size:12px;margin-top:8px">近5年×' + mm.f5 + " · 近10年×" + mm.f10 + " · 难度：" + (mm.d || "—") + "</div>" +
@@ -503,6 +503,7 @@
         '<button class="btn ghost" id="rnd" style="flex:1">随机</button>' +
         '<button class="btn ghost" id="next" style="flex:1">下一个</button></div>';
       document.getElementById("fav-btn").onclick = function () { var on = toggleFav(w.w, w.m); this.classList.toggle("on", on); toast(on ? "已收藏" : "已取消收藏"); };
+      document.getElementById("say-btn").onclick = function () { speak(w.w); };
       document.getElementById("flash-card").onclick = function () { revealed = !revealed; draw(); };
       document.getElementById("prev").onclick = function () { idx = (idx - 1 + words.length) % words.length; revealed = false; draw(); };
       document.getElementById("next").onclick = function () { idx = (idx + 1) % words.length; revealed = false; draw(); };
@@ -611,13 +612,16 @@
       var items = q ? list.filter(function (v) { return v.word.toLowerCase().indexOf(q) >= 0 || (v.meaningZh || "").indexOf(q) >= 0; }) : list;
       var fav = getFav();
       box.innerHTML = '<p class="muted" style="margin:10px 0">共 ' + items.length + " 个</p>" + items.map(function (v) {
+        var coll = collocOf(v.word);
         return '<div class="card"><div class="between"><b style="font-size:18px;color:var(--primary)">' + esc(v.word) + " <span class='muted' style='font-weight:400'>" + esc(v.phonetic || "") + "</span></b>" +
-          '<button class="star' + (fav[v.word] != null ? " on" : "") + '" data-fav="' + esc(v.word) + '" data-m="' + esc(v.meaningZh || "") + '">★</button></div>' +
+          '<span><button class="star" data-say="' + esc(v.word) + '">🔊</button><button class="star' + (fav[v.word] != null ? " on" : "") + '" data-fav="' + esc(v.word) + '" data-m="' + esc(v.meaningZh || "") + '">★</button></span></div>' +
           '<div style="margin-top:6px">' + esc(v.meaningZh || "") + "</div>" +
-          (v.example ? '<div class="muted" style="margin-top:8px">例：' + esc(v.example) + "</div>" : "") + "</div>";
+          (coll.length ? '<div class="muted" style="margin-top:6px">搭配：' + coll.map(esc).join("；") + "</div>" : "") +
+          (v.example ? '<div class="muted" style="margin-top:6px">例：' + esc(v.example) + "</div>" : "") + "</div>";
       }).join("");
       box.querySelectorAll(".star").forEach(function (b) {
-        b.onclick = function () { var on = toggleFav(b.getAttribute("data-fav"), b.getAttribute("data-m")); b.classList.toggle("on", on); toast(on ? "已收藏到生词本" : "已取消收藏"); };
+        if (b.getAttribute("data-say")) b.onclick = function () { speak(b.getAttribute("data-say")); };
+        else b.onclick = function () { var on = toggleFav(b.getAttribute("data-fav"), b.getAttribute("data-m")); b.classList.toggle("on", on); toast(on ? "已收藏到生词本" : "已取消收藏"); };
       });
     }
     document.getElementById("vip-search").oninput = function () { draw(this.value); };
@@ -735,6 +739,7 @@
       '<textarea id="wr-text" rows="10" placeholder="在此输入你的英文作文…"></textarea>' +
       '<div class="between" style="margin-top:8px"><span id="wr-wc" class="muted">词数：0</span><span class="muted">建议 120–180 词</span></div>' +
       '<button class="btn block" id="wr-grade" style="margin-top:14px">AI 智能批改</button>' +
+      '<button class="btn outline block" id="wr-img" style="margin-top:8px">📷 拍照/上传图片批改</button>' +
       '<div class="center" style="margin-top:10px"><button class="btn ghost small" id="wr-ref">查看参考范文</button></div>' +
       '<div id="wr-refbox" style="display:none;margin-top:10px"></div>' +
       '<div id="wr-result"></div></div>';
@@ -742,6 +747,7 @@
     document.getElementById("backslot").appendChild(backBar("返回", renderWritingList));
     var ta = document.getElementById("wr-text");
     ta.oninput = function () { document.getElementById("wr-wc").textContent = "词数：" + (ta.value.trim() ? ta.value.trim().split(/\s+/).filter(Boolean).length : 0); };
+    document.getElementById("wr-img").onclick = function () { imageGrade("essay", s.prompt, document.getElementById("wr-result")); };
     document.getElementById("wr-ref").onclick = function () {
       var b = document.getElementById("wr-refbox"); var show = b.style.display === "none";
       b.style.display = show ? "block" : "none"; b.innerHTML = '<div class="ai-result">' + esc(s.reference || "（暂无）").replace(/\n/g, "<br>") + "</div>";
@@ -777,11 +783,13 @@
       '<div class="card"><div class="passage">' + esc(s.prompt) + "</div>" +
       '<textarea id="tr-input" rows="5" placeholder="输入你的英文译文…"></textarea>' +
       '<button class="btn block" id="tr-grade" style="margin-top:12px">AI 批改译文</button>' +
+      '<button class="btn outline block" id="tr-img" style="margin-top:8px">📷 拍照/上传译文批改</button>' +
       '<div class="center" style="margin-top:10px"><button class="btn ghost small" id="tr-ref">查看参考译文</button></div>' +
       '<div id="tr-refbox" style="display:none;margin-top:10px"></div>' +
       '<div id="tr-result"></div></div></div>';
     main.innerHTML = html;
     document.getElementById("backslot").appendChild(backBar("返回", renderTranslationList));
+    document.getElementById("tr-img").onclick = function () { imageGrade("translation", s.prompt, document.getElementById("tr-result")); };
     document.getElementById("tr-ref").onclick = function () {
       var b = document.getElementById("tr-refbox"); var show = b.style.display === "none";
       b.style.display = show ? "block" : "none"; b.innerHTML = '<div class="info">' + esc(s.reference || "（暂无）") + "</div>";
@@ -1791,8 +1799,9 @@
       var kn = r.kind === "essay" ? "作文" : (r.kind === "translation" ? "翻译" : "其他");
       var color = r.kind === "essay" ? "#8E24AA" : "#5E35B1";
       var sc = r.score != null ? r.score : parseScore(r.result, r.kind);
+      if (r.kind === "essay" && sc != null && sc > 15) sc = Math.round(sc * 0.15 * 10) / 10;
       html += '<div class="card"><div class="between"><b style="color:' + color + '">' + kn + " · " + esc(r.date) + "</b>" +
-        "<span>" + (sc != null ? '<b style="color:var(--primary)">' + sc + (r.kind === "essay" ? "/100" : "/15") + "</b>" : '<span class="muted">未解析到分数</span>') +
+        "<span>" + (sc != null ? '<b style="color:var(--primary)">' + sc + "/15</b>" : '<span class="muted">未解析到分数</span>') +
         ' <button class="star" data-del="' + r.id + '" style="color:#c62828">×</button></span></div>' +
         '<div class="muted" style="margin-top:6px">' + esc((r.title || "").slice(0, 70)) + "</div>" +
         '<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">查看原文与批改</summary>' +
@@ -1815,7 +1824,7 @@
     var essays = getRecords("essay"), trans = getRecords("translation");
     var e = essays.length ? essays[essays.length - 1] : null, tr = trans.length ? trans[trans.length - 1] : null;
     var wRaw = 0, hasW = false;
-    if (e) { var es = e.score != null ? e.score : parseScore(e.result, "essay"); if (es != null) { wRaw += es / 100 * 15; hasW = true; } }
+    if (e) { var es = e.score != null ? e.score : parseScore(e.result, "essay"); if (es != null) { if (es > 15) es = es * 0.15; wRaw += es; hasW = true; } }
     if (tr) { var ts = tr.score != null ? tr.score : parseScore(tr.result, "translation"); if (ts != null) { wRaw += ts; hasW = true; } }
     var w = hasW ? Math.round(wRaw * 10) / 10 : null;
     addExam({ date: todayKey(), source: "考试（客观题+作文/翻译）", h: h, ht: ht || 25, r: rc, rt: rt || 30, w: w, wt: 30, est: examEst(h, ht || 25, rc, rt || 30, w, 30), writingEstimated: !hasW });
@@ -1978,14 +1987,20 @@
     var head = '<label class="muted" style="cursor:pointer;display:block;margin-bottom:6px"><input type="checkbox" id="st-spell" ' + (spell ? "checked" : "") + "> 边背边拼写（加一轮拼写考察）</label>";
     function step() { if (si >= sched.length) { summary(); return; } var t = sched[si]; if (t.t === "learn") learn(t.g); else if (t.t === "en2zh") quiz(t.g, "en2zh"); else if (t.t === "zh2en") quiz(t.g, "zh2en"); else spellBatch(t.g); }
     function learn(g) {
-      var words = groups[g], h = head + '<div class="between"><span class="muted">背新词 · 第' + (g + 1) + " 组</span></div>" +
-        '<div class="info">先记住这 ' + words.length + " 个词，随后以英译汉/汉译英等形式考察。</div>";
-      words.forEach(function (w) { var mm = wmeta(w.w), ex = exampleOf(w.w);
-        h += '<div class="card"><div class="between"><b style="font-size:20px;color:var(--primary)">' + esc(w.w) + '</b><span class="muted">' + (w.p ? "/" + esc(w.p) + "/" : "") + "</span></div>" +
-          '<div style="margin-top:6px;font-size:16px">' + esc(w.m) + "</div>" + (ex ? '<div class="muted" style="margin-top:6px">例：' + esc(ex) + "</div>" : "") + "</div>";
+      var words = groups[g], h = head + '<div class="between"><span class="muted">背新词 · 第' + (g + 1) + ' 组</span></div>' +
+        '<div class="info">先记住这 ' + words.length + " 个词（含发音、固定搭配），随后以英译汉/汉译英等形式考察。</div>";
+      words.forEach(function (w, i) {
+        var ex = exampleOf(w.w); var coll = collocOf(w.w);
+        h += '<div class="card"><div class="between"><b style="font-size:20px;color:var(--primary)">' + esc(w.w) + '</b><span class="muted">' + (w.p ? "/" + esc(w.p) + "/" : "") + ' <button class="star" data-say="' + i + '">🔊</button></span></div>' +
+          '<div style="margin-top:6px;font-size:16px">' + esc(w.m) + "</div>" +
+          (coll.length ? '<div class="muted" style="margin-top:6px">搭配：' + coll.map(esc).join("；") + "</div>" : "") +
+          (ex ? '<div class="muted" style="margin-top:4px">例：' + esc(ex) + "</div>" : "") +
+          '<button class="btn ghost small" data-dic="' + i + '" style="margin-top:6px">查词典</button><div id="dicbox-' + i + '"></div></div>';
       });
       h += '<button class="btn block" id="learn-next">记住了，开始测验</button>';
       body.innerHTML = h;
+      body.querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { speak(words[parseInt(b.getAttribute("data-say"), 10)].w); }; });
+      body.querySelectorAll("[data-dic]").forEach(function (b) { b.onclick = function () { var i = parseInt(b.getAttribute("data-dic"), 10); lookupWord(words[i].w, document.getElementById("dicbox-" + i)); }; });
       document.getElementById("learn-next").onclick = function () { si++; step(); };
     }
     function quiz(g, kind) {
@@ -2374,6 +2389,52 @@
       document.getElementById("cb-show").onclick = function () { document.getElementById("cb-bk").style.display = "block"; document.getElementById("cb-ctl").innerHTML = '<div class="row"><button class="btn ghost" id="cb-no" style="flex:1">还没记住</button><button class="btn" id="cb-yes" style="flex:1">记住了</button></div>'; document.getElementById("cb-no").onclick = function () { upd(false); }; document.getElementById("cb-yes").onclick = function () { upd(true); }; };
       function upd(ok) { var s = store("cet4_colloc_srs", {}); var r = s[x.en] || { b: 0 }; r.b = ok ? Math.min(6, (r.b || 0) + 1) : 0; r.d = dstr(SRS_INT[r.b]); s[x.en] = r; saveStore("cet4_colloc_srs", s); i++; draw(); }
     })();
+  }
+
+  /* ---------- 图片批改 / 词典查词 ---------- */
+  function pickImage(cb) {
+    var inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/*";
+    inp.onchange = function () { var f = inp.files && inp.files[0]; if (!f) return; var fr = new FileReader(); fr.onload = function () { cb(fr.result); }; fr.readAsDataURL(f); };
+    inp.click();
+  }
+  function imageGrade(kind, instruction, res) {
+    if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+    pickImage(function (dataUrl) {
+      res.innerHTML = '<div class="muted" style="margin-top:12px">识别批改中…（较慢，请稍候）</div>';
+      gradeImages([dataUrl], instruction, kind)
+        .then(function (md) {
+          res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div>' +
+            '<div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">一键加入错词本</button></div>';
+          saveRecord(kind, instruction || "（图片批改）", "（图片识别）", md); toast("已保存到记录");
+          var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam;
+          var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); };
+        })
+        .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">失败：' + esc(e.message) + "</div>"; });
+    });
+  }
+  function collocOf(word) { return ((window.CET4_COLLOC || {})[String(word).toLowerCase()]) || []; }
+  function lookupWord(word, container) {
+    var w = String(word).toLowerCase();
+    function render(d) {
+      container.innerHTML = '<div class="info" style="margin-top:8px"><b>' + esc(word) + "</b> " + (d.ph ? esc(d.ph) : "") +
+        (d.audio ? ' <button class="btn ghost small" id="dic-play-' + w.replace(/[^a-z]/g, "") + '">🔊</button>' : "") +
+        '<div style="margin-top:6px">' + esc(d.def || "") + "</div>" + (d.ex ? '<div class="muted" style="margin-top:4px">例：' + esc(d.ex) + "</div>" : "") + "</div>";
+      var pb = document.getElementById("dic-play-" + w.replace(/[^a-z]/g, "")); if (pb && d.audio) pb.onclick = function () { try { new Audio(d.audio).play(); } catch (e) { speak(word); } };
+    }
+    var cache = store("cet4_dict", {});
+    if (cache[w]) { render(cache[w]); return; }
+    container.innerHTML = '<div class="muted" style="margin-top:8px">查询中…</div>';
+    fetch("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(w))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (arr) {
+        if (!arr || !arr[0]) throw new Error("未找到");
+        var e = arr[0], ph = e.phonetic || "", def = "", ex = "", audio = "";
+        (e.phonetics || []).forEach(function (p) { if (!ph && p.text) ph = p.text; if (!audio && p.audio) audio = p.audio; });
+        (e.meanings || []).forEach(function (m) { (m.definitions || []).forEach(function (dd) { if (!def) def = m.partOfSpeech + ". " + dd.definition; if (!ex && dd.example) ex = dd.example; }); });
+        var d = { ph: ph, def: def, ex: ex, audio: audio };
+        var c = store("cet4_dict", {}); c[w] = d; saveStore("cet4_dict", c); render(d);
+      })
+      .catch(function () { container.innerHTML = '<div class="muted" style="margin-top:8px">联网词典暂不可用（可先看搭配）。</div>'; });
   }
 
   /* ---------- settings ---------- */
