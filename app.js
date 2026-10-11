@@ -359,7 +359,7 @@
   var CATS = [
     { k: "words", t: "背单词", d: "背单词 · 复习 · 词书 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "review", "vtest", "vrecords", "roots", "fav"] },
     { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
-    { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 错词本 · 搭配本 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "writinglib", "errbook", "collocbook", "grammar", "collocations"] },
+    { k: "skill", t: "专项练习", d: "听力 · VOA · 阅读 · 翻译 · 写作 · 错词本 · 搭配本 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "voa", "reading", "translation", "writing", "writinglib", "errbook", "collocbook", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
     { k: "me", t: "我的学习", d: "计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav", "monitor"] },
     { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
@@ -377,6 +377,7 @@
     yati: { t: "押题卷", d: "11 套押题/模拟卷 · 试卷 PDF + 听力音频", ic: "押", c: "#AD1457" },
     mocks: { t: "全真模拟", d: "10 套完整模拟卷 · 听力/阅读/翻译/写作", ic: "模", c: "#C62828" },
     listening: { t: "听力练习", d: "24 套 · 音频 + 原文 + 自动批改", ic: "听", c: "#F4511E" },
+    voa: { t: "VOA 听力", d: "12 篇科学新闻 · 慢速美音 + 原文 + 题目", ic: "VOA", c: "#1565C0" },
     reading: { t: "阅读完形", d: "30 篇 300 题 · 自动批改", ic: "阅", c: "#00897B" },
     translation: { t: "翻译练习", d: "12 篇汉译英 · AI 批改", ic: "译", c: "#5E35B1" },
     writing: { t: "作文批改", d: "12 道题 · AI 评分与范文", ic: "文", c: "#8E24AA" },
@@ -650,6 +651,15 @@
     });
   }
 
+  function renderVoaList() {
+    var list = window.CET4_VOA || [];
+    listPage("VOA 科学新闻听力（" + list.length + " 篇）", list, function (s, i) {
+      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#1565C01f;color:#1565C0">VOA</div>' +
+        '<div><h3>' + esc(s.theme) + "</h3><p>" + s.questions.length + " 题 · 含原文 · 可精听</p></div>" +
+        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+    }, function (s) { renderListeningDetail(s, renderVoaList); });
+  }
+
   /* ---------- reading ---------- */
   function renderReadingList() {
     moduleView({
@@ -682,7 +692,7 @@
       simOpen: renderListeningDetail, zType: "listening", zFocus: "listening", zLabel: "听力"
     });
   }
-  function renderListeningDetail(s) {
+  function renderListeningDetail(s, backFn) {
     var segs = s.segments || [];
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(s.theme) + "（" + (LISTEN_LABEL[s.type] || s.type) + "）</div>" +
       '<div class="card"><audio controls preload="metadata" id="la" style="width:100%" src="' + esc(s.audio) + '"></audio>' +
@@ -702,7 +712,7 @@
     }
     html += '<div class="section-title">听力题目</div>' + sectionCard(s.questions) + "</div>";
     main.innerHTML = html;
-    document.getElementById("backslot").appendChild(backBar("返回", renderListeningList));
+    document.getElementById("backslot").appendChild(backBar("返回", backFn || renderListeningList));
     var au = document.getElementById("la");
     main.querySelectorAll("[data-sp]").forEach(function (b) { b.onclick = function () { au.playbackRate = parseFloat(b.getAttribute("data-sp")); toast("语速 " + b.getAttribute("data-sp") + "×"); }; });
     document.getElementById("toggle-tr").onclick = function () {
@@ -2565,6 +2575,7 @@
     else if (name === "vocab") renderVocab();
     else if (name === "reading") renderReadingList();
     else if (name === "listening") renderListeningList();
+    else if (name === "voa") renderVoaList();
     else if (name === "writing") renderWritingList();
     else if (name === "writinglib") renderWritingLib();
     else if (name === "errbook") renderErrBook();
