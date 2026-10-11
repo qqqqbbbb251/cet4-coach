@@ -123,7 +123,70 @@
   }
   function getVocabLog() { return store("cet4_vocab", { days: {}, learned: {}, total: 0 }); }
   function saveVocabLog(v) { saveStore("cet4_vocab", v); }
-  function exampleOf(word) { var v = (DATA.vocabulary || []).filter(function (x) { return x.word === word; })[0]; return v ? v.example : ""; }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  function exampleOf(word) { var v = (DATA.vocabulary || []).filter(function (x) { return x.word === word; })[0]; return v ? v.example : ""; }
+
+  /* ---------- SRS 记忆曲线 ---------- */
+  var SRS_INT = [0, 1, 2, 4, 7, 15, 30];
+  function getSrs() { return store("cet4_srs", {}); }
+  function saveSrs(s) { saveStore("cet4_srs", s); }
+  function dstr(off) { var d = new Date(); d.setDate(d.getDate() + off); return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function srsUpdate(word, meaning, known) {
+    var s = getSrs(); var r = s[word] || { b: 0 };
+    r.b = known ? Math.min(6, (r.b || 0) + 1) : 0;
+    r.d = dstr(SRS_INT[r.b]); r.m = meaning || r.m || "";
+    s[word] = r; saveSrs(s);
+  }
+  function srsDue() { var s = getSrs(), t = todayKey(); return Object.keys(s).filter(function (w) { return s[w].d <= t; }); }
+
+  /* ---------- 折线图 ---------- */
+  function svgLine(points, maxV, unit) {
+    maxV = maxV || 100; var W = Math.max(300, points.length * 46), H = 150, pad = 24;
+    function x(i) { return pad + i * ((W - 2 * pad) / Math.max(1, points.length - 1)); }
+    function y(v) { return H - pad - (Math.min(v, maxV) / maxV) * (H - 2 * pad); }
+    var line = points.map(function (p, i) { return x(i) + "," + y(p.v); }).join(" ");
+    var dots = points.map(function (p, i) { return '<circle cx="' + x(i) + '" cy="' + y(p.v) + '" r="3.5" fill="#3949AB"/>'; }).join("");
+    var labels = points.map(function (p, i) { return '<text x="' + x(i) + '" y="' + (H - 6) + '" font-size="10" fill="#9aa0b4" text-anchor="middle">' + p.label + "</text>"; }).join("");
+    var vals = points.map(function (p, i) { return '<text x="' + x(i) + '" y="' + (y(p.v) - 8) + '" font-size="10" fill="#3949AB" text-anchor="middle">' + p.v + "</text>"; }).join("");
+    return '<div style="overflow-x:auto"><svg width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + " " + H + '" style="min-width:100%">' +
+      '<line x1="' + pad + '" y1="' + (H - pad) + '" x2="' + (W - pad) + '" y2="' + (H - pad) + '" stroke="#e3e5ef"/>' +
+      '<polyline points="' + line + '" fill="none" stroke="#3949AB" stroke-width="2"/>' + dots + labels + vals + "</svg></div>";
+  }
+
+  /* ---------- 云同步（Supabase REST，兼容通用 JSON 端点） ---------- */
+  function buildSnapshot() {
+    var p = store("cet4_progress", { a: 0, c: 0, days: {}, types: {} });
+    var days = p.days || {}, keys = Object.keys(days).sort().slice(-30);
+    return {
+      name: store("cet4_syncname", "学生"), updated: new Date().toISOString(),
+      total: p.a, correct: p.c, acc: p.a ? Math.round(p.c / p.a * 100) : 0,
+      types: p.types || {},
+      days: keys.map(function (k) { return { d: k, a: days[k].a, c: days[k].c }; }),
+      exams: examList(), essayN: recStats("essay").n, essayAvg: recStats("essay").avg,
+      transN: recStats("translation").n, transAvg: recStats("translation").avg,
+      vocab: (function () { var v = getVocabLog(); return { total: v.total || 0, days: Object.keys(v.days || {}).length }; })(),
+      wrongN: Object.keys(store("cet4_wrong", {})).length
+    };
+  }
+  function syncCfg() { return { url: store("cet4_syncurl", ""), key: store("cet4_synckey", ""), name: store("cet4_syncname", "学生") }; }
+  function pushSync() {
+    var c = syncCfg();
+    if (!c.url) return Promise.reject(new Error("未配置同步地址"));
+    var base = c.url.replace(/\/+$/, "");
+    var headers = { "Content-Type": "application/json", "Accept": "application/json" };
+    if (c.key) { headers["apikey"] = c.key; headers["Authorization"] = "Bearer " + c.key; }
+    headers["Prefer"] = "resolution=merge-duplicates";
+    return fetch(base + "/rest/v1/sync", { method: "POST", headers: headers, body: JSON.stringify([{ id: c.name, data: buildSnapshot() }]) })
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("同步失败 " + r.status + " " + t.slice(0, 120)); }); return true; });
+  }
+  function pullSync() {
+    var c = syncCfg();
+    if (!c.url) return Promise.reject(new Error("未配置同步地址"));
+    var base = c.url.replace(/\/+$/, "");
+    var headers = { "Accept": "application/json" };
+    if (c.key) { headers["apikey"] = c.key; headers["Authorization"] = "Bearer " + c.key; }
+    return fetch(base + "/rest/v1/sync?select=*", { headers: headers })
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("读取失败 " + r.status + " " + t.slice(0, 120)); }); return r.json(); });
+  }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -291,11 +354,11 @@
   }
 
   var CATS = [
-    { k: "words", t: "背单词", d: "背单词 · 词书 · 拼写 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "vtest", "vrecords", "roots", "fav"] },
+    { k: "words", t: "背单词", d: "背单词 · 复习 · 词书 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "review", "vtest", "vrecords", "roots", "fav"] },
     { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
     { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
-    { k: "me", t: "我的学习", d: "学习计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav"] },
+    { k: "me", t: "我的学习", d: "计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav", "monitor"] },
     { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
   ];
   var MODS = {
@@ -303,6 +366,8 @@
     roots: { t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测", ic: "根", c: "#00838F" },
     vtest: { t: "单词量测试", d: "估算你的词汇量", ic: "测", c: "#00838F" },
     vrecords: { t: "背单词记录", d: "每日背词量 · 打卡", ic: "录", c: "#C8860A" },
+    review: { t: "记忆曲线复习", d: "按遗忘曲线到期复习", ic: "复", c: "#00695C" },
+    monitor: { t: "监督看板", d: "远程查看她的学习数据与曲线", ic: "监", c: "#3730A3" },
     fav: { t: "生词本", d: "收藏的重点词汇", ic: "★", c: "#C8860A" },
     zhenti: { t: "历年真题", d: "76 套（2015–2026）· 3325 题 · 含答案解析", ic: "卷", c: "#B71C1C" },
     eztor: { t: "原创模拟", d: "2 套原创模拟卷 · 55 题含答案解析", ic: "拟", c: "#6A1B9A" },
@@ -1657,6 +1722,12 @@
       if (ts.n) html += '<div class="between" style="margin:6px 0"><span>翻译</span><span class="muted">' + ts.n + " 篇 · 平均 " + ts.avg + "/15</span></div>";
       html += "</div>";
     }
+    var _days = p.days || {}, _dk = Object.keys(_days).sort().slice(-14);
+    if (_dk.length) html += '<div class="card"><div class="section-title" style="margin-top:0">练习正确率趋势</div>' + svgLine(_dk.map(function (k) { return { label: k.slice(5), v: _days[k].a ? Math.round(_days[k].c / _days[k].a * 100) : 0 }; }), 100) + "</div>";
+    var _exs = examList();
+    if (_exs.length) html += '<div class="card"><div class="section-title" style="margin-top:0">模考成绩走势（/710）</div>' + svgLine(_exs.map(function (x) { return { label: x.date.slice(5), v: x.est }; }), 710) + "</div>";
+    var _dueN = srsDue().length;
+    html += '<div class="fcard" data-go="review" style="margin-bottom:12px"><div class="ic" style="background:#00695C1f;color:#00695C">复</div><div class="txt"><h3>记忆曲线复习</h3><p>' + (_dueN ? ("今日待复习 " + _dueN + " 词") : "今日无到期复习") + '</p></div><div class="arrow">›</div></div>';
     html += '<div class="grid">' +
       '<div class="fcard" data-go="wrong"><div class="ic" style="background:#C628281f;color:#C62828">错</div><div class="txt"><h3>错题本</h3><p>' + wrongN + ' 道错题</p></div><div class="arrow">›</div></div>' +
       '<div class="fcard" data-go="fav"><div class="ic" style="background:#F6B93B1f;color:#C8860A">★</div><div class="txt"><h3>生词本</h3><p>' + favN + ' 个单词</p></div><div class="arrow">›</div></div>' +
@@ -1782,6 +1853,7 @@
         var d = todayKey(); log.days[d] = (log.days[d] || 0) + 1; log.total = (log.total || 0) + 1;
         log.learned[w.w] = known ? "k" : "u"; saveVocabLog(log);
         recordAnswer("vocab", known);
+        srsUpdate(w.w, w.m, known);
         if (known) ok++; else { no++; review.push(w); }
         idx++; draw();
       }
@@ -1917,7 +1989,7 @@
       var need = allw.filter(function (w) { var p = pass[w.w]; return !(p.a && p.b && p.s); });
       var log = getVocabLog(), d = todayKey();
       log.days[d] = (log.days[d] || 0) + allw.length; log.total = (log.total || 0) + allw.length;
-      allw.forEach(function (w) { log.learned[w.w] = (pass[w.w].a && pass[w.w].b && pass[w.w].s) ? "k" : "u"; });
+      allw.forEach(function (w) { var ms = pass[w.w].a && pass[w.w].b && pass[w.w].s; log.learned[w.w] = ms ? "k" : "u"; srsUpdate(w.w, w.m, ms); });
       saveVocabLog(log);
       body.innerHTML = '<div class="card" style="text-align:center"><h2>本组完成 🎉</h2><p>掌握 ' + mastered.length + " / " + allw.length + "</p>" +
         (need.length ? '<div class="muted" style="margin-top:6px">待巩固：' + need.map(function (w) { return esc(w.w); }).join("、") + "</div>" : '<div class="muted">全部通过，太棒了！</div>') +
@@ -1942,6 +2014,71 @@
     main.innerHTML = html;
   }
 
+  /* ---------- 记忆曲线复习 ---------- */
+  function renderReview() {
+    var due = srsDue();
+    var srs = getSrs();
+    var all = bookWords("cet4");
+    var html = '<div class="page"><div class="section-title">记忆曲线复习</div>';
+    if (!due.length) {
+      html += '<div class="info">今日没有到期的复习。背单词满一天后会按 1/2/4/7/15/30 天的间隔提醒复习。</div>';
+      main.innerHTML = html; return;
+    }
+    due = shuffle(due).slice(0, 20);
+    var blk = due.map(function (w) {
+      var m = (srs[w] && srs[w].m) || "";
+      var dists = [];
+      while (dists.length < 3) { var x = all[Math.floor(Math.random() * all.length)]; if (x && x.m && x.m !== m && dists.indexOf(x.m) < 0) dists.push(x.m); if (all.length < 4) break; }
+      return { w: w, m: m, opts: shuffle([m].concat(dists)) };
+    });
+    html += '<div class="info">今日待复习 ' + due.length + " 个词（英译汉，全过后间隔变长）。</div>";
+    blk.forEach(function (b, qi) {
+      html += '<div class="card"><div class="stem">' + (qi + 1) + ". " + esc(b.w) + "</div>";
+      b.opts.forEach(function (o, oi) { html += '<div class="opt" data-q="' + qi + '" data-o="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + ".</span><span>" + esc(o) + "</span></div>"; });
+      html += "</div>";
+    });
+    html += '<button class="btn block" id="rv-sub">提交</button></div>';
+    main.innerHTML = html;
+    var cards = main.querySelectorAll(".card");
+    main.querySelectorAll(".opt").forEach(function (el) { el.onclick = function () { if (main.dataset.done) return; var qi = parseInt(el.getAttribute("data-q"), 10); blk[qi].sel = parseInt(el.getAttribute("data-o"), 10); cards[qi].querySelectorAll(".opt").forEach(function (x) { x.classList.remove("sel"); }); el.classList.add("sel"); }; });
+    document.getElementById("rv-sub").onclick = function () {
+      if (main.dataset.done) { renderReview(); return; }
+      main.dataset.done = "1";
+      var ok = 0;
+      blk.forEach(function (b, qi) { var ans = b.opts.indexOf(b.m); cards[qi].querySelectorAll(".opt").forEach(function (o) { o.classList.add("locked"); var oi = parseInt(o.getAttribute("data-o"), 10); if (oi === ans) o.classList.add("correct"); else if (oi === b.sel) o.classList.add("wrong"); }); var good = b.sel === ans; if (good) ok++; srsUpdate(b.w, b.m, good); });
+      this.textContent = "完成（对 " + ok + "/" + blk.length + "）";
+      toast("复习完成，答对 " + ok + "/" + blk.length);
+    };
+  }
+
+  /* ---------- 监督看板（远程查看她的数据） ---------- */
+  function renderMonitor() {
+    main.innerHTML = '<div class="page"><div class="section-title">监督看板</div>' +
+      '<div class="info">配置好云同步后（见「设置 → 云同步」），这里可查看她的学习数据与进步曲线。也可在 Supabase 后台直接看表。</div>' +
+      '<button class="btn block" id="mon-load">读取云端数据</button><div id="mon-res" style="margin-top:12px"></div></div>';
+    document.getElementById("mon-load").onclick = function () {
+      var c = syncCfg();
+      if (!c.url) { toast("请先在设置里配置云同步地址"); return; }
+      var res = document.getElementById("mon-res"); res.innerHTML = '<div class="muted">读取中…</div>';
+      pullSync().then(function (rows) {
+        if (!rows || !rows.length) { res.innerHTML = '<div class="info">云端暂无数据（她还需要在设置里配置同步并点“立即同步”）。</div>'; return; }
+        var h = "";
+        rows.forEach(function (row) {
+          var s = row.data || {};
+          h += '<div class="card"><div class="between"><b>' + esc(s.name || row.id || "学生") + '</b><span class="muted">' + esc((s.updated || "").slice(0, 10)) + "</span></div>" +
+            '<div class="stat-row" style="margin-top:8px"><div class="stat"><div class="n">' + (s.total || 0) + '</div><div class="l">已做题</div></div>' +
+            '<div class="stat"><div class="n">' + (s.acc || 0) + '%</div><div class="l">正确率</div></div>' +
+            '<div class="stat"><div class="n">' + (s.vocab ? s.vocab.total : 0) + '</div><div class="l">背词</div></div>' +
+            '<div class="stat"><div class="n">' + (s.wrongN || 0) + '</div><div class="l">错题</div></div></div>';
+          if (s.exams && s.exams.length) h += '<div class="muted" style="margin-top:6px">模考：' + s.exams.map(function (x) { return x.date.slice(5) + " " + x.est; }).join("、") + ' /710</div>';
+          if (s.days && s.days.length) h += '<div class="section-title" style="margin-top:10px">近30天正确率</div>' + svgLine(s.days.map(function (d) { return { label: d.d.slice(5), v: d.a ? Math.round(d.c / d.a * 100) : 0 }; }), 100);
+          h += "</div>";
+        });
+        res.innerHTML = h;
+      }).catch(function (e) { res.innerHTML = '<div class="info warn">读取失败：' + esc(e.message) + "</div>"; });
+    };
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -1956,6 +2093,12 @@
       '<button class="btn outline" id="set-test" style="flex:1">测试连接</button></div>' +
       '<div id="set-msg"></div>' +
       '<button class="btn outline block" id="set-data" style="margin-top:12px">数据导入 / 导出</button>' +
+      '<div class="section-title" style="margin-top:14px">云同步（可选 · 用于远程监督）</div>' +
+      '<div class="info">配置后本机数据会上传到你的 Supabase，方便远程查看。地址＝Project URL，Key＝anon key，同步码＝她的名字（见下方说明）。</div>' +
+      '<label class="fld"><span>同步地址（Supabase Project URL）</span><input type="text" id="set-syncurl" value="' + esc(store("cet4_syncurl", "")) + '"></label>' +
+      '<label class="fld"><span>Key（anon）</span><input type="text" id="set-synckey" value="' + esc(store("cet4_synckey", "")) + '"></label>' +
+      '<label class="fld"><span>同步码 / 姓名</span><input type="text" id="set-syncname" value="' + esc(store("cet4_syncname", "学生")) + '"></label>' +
+      '<div class="row"><button class="btn" id="set-syncsave" style="flex:1">保存并立即同步</button><button class="btn outline" id="set-dash2" style="flex:1">监督看板</button></div>' +
       '<div class="row" style="margin-top:16px"><button class="btn ghost block" id="set-close">关闭</button></div></div>';
     document.body.appendChild(mask);
     function close() { document.body.removeChild(mask); }
@@ -1967,6 +2110,15 @@
     };
     document.getElementById("set-msg").innerHTML = "";
     document.getElementById("set-data").onclick = openDataIO;
+    document.getElementById("set-syncsave").onclick = function () {
+      saveStore("cet4_syncurl", document.getElementById("set-syncurl").value.trim());
+      saveStore("cet4_synckey", document.getElementById("set-synckey").value.trim());
+      saveStore("cet4_syncname", document.getElementById("set-syncname").value.trim() || "学生");
+      var msg = document.getElementById("set-msg");
+      msg.innerHTML = '<div class="info">同步中…</div>';
+      pushSync().then(function () { msg.innerHTML = '<div class="info">已同步到云端。</div>'; }).catch(function (e) { msg.innerHTML = '<div class="info warn">同步失败：' + esc(e.message) + "</div>"; });
+    };
+    document.getElementById("set-dash2").onclick = function () { close(); openView("monitor"); };
     document.getElementById("set-test").onclick = function () {
       var key = document.getElementById("set-key").value.trim();
       if (!key) { toast("请先填写 API Key"); return; }
@@ -2004,6 +2156,8 @@
     else if (name === "roots") renderRootsList();
     else if (name === "vtest") renderVocabTest(main);
     else if (name === "vrecords") renderVocabRecords();
+    else if (name === "review") renderReview();
+    else if (name === "monitor") renderMonitor();
     else if (name === "eztor") renderEztorList();
     else if (name === "links") renderLinks();
     else if (name === "yati") renderYatiList();
