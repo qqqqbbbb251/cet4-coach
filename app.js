@@ -326,7 +326,7 @@
   var MODS = {
     vocab: { t: "单词检测", d: "单词卡 · 中译英 · 拼写 · 词书 · 重点词 · 生词本", ic: "Aa", c: "#3949AB" },
     roots: { t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测", ic: "根", c: "#00838F" },
-    vtest: { t: "单词量测试", d: "估算你的词汇量", ic: "测", c: "#00838F" },
+    vtest: { t: "单词量测试", d: "英译汉/汉译英/拼写 · 测阅读/听力/写作词汇量", ic: "测", c: "#00838F" },
     vrecords: { t: "背单词记录", d: "每日背词量 · 打卡", ic: "录", c: "#C8860A" },
     review: { t: "记忆曲线复习", d: "按遗忘曲线到期复习", ic: "复", c: "#00695C" },
     monitor: { t: "监督看板", d: "远程查看她的学习数据与曲线", ic: "监", c: "#3730A3" },
@@ -1670,29 +1670,213 @@
       el.onclick = function () { saveStore("cet4_book", el.getAttribute("data-book")); toast("已选择词书，开始背吧"); document.getElementById("tab-study").click(); };
     });
   }
-  function renderVocabTest(bodyOld) {
-    var t = window.CET4_VTEST || { sizes: [], real: [], fake: [] };
-    var items = t.real.map(function (w) { return { w: w.w, b: w.b, fake: false }; }).concat((t.fake || []).map(function (w) { return { w: w, b: -1, fake: true }; }));
-    items = shuffle(items.slice());
-    var checked = {};
-    bodyOld.innerHTML = '<div class="page"><div class="section-title">单词量测试</div>' +
-      '<div class="info">勾选你"认识"的单词（＝看到能说出大致中文意思）。**不确定请不要勾**——里面混有干扰项，用于校正虚报。共 ' + items.length + " 词。</div>" +
-      items.map(function (it, i) {
-        return '<label class="card" style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" data-i="' + i + '" style="width:18px;height:18px"><b style="font-size:17px;color:var(--primary)">' + esc(it.w) + "</b></label>";
-      }).join("") +
-      '<button class="btn block" id="vt-go" style="margin-top:12px">估算词汇量</button><div id="vt-res"></div></div>';
-    bodyOld.querySelectorAll("[data-i]").forEach(function (cb) { cb.onchange = function () { checked[cb.getAttribute("data-i")] = cb.checked; }; });
-    document.getElementById("vt-go").onclick = function () {
-      var sizes = t.sizes, per = {}, fakeN = 0, fakeK = 0;
-      items.forEach(function (it, i) { if (it.fake) { fakeN++; if (checked[i]) fakeK++; } else { per[it.b] = per[it.b] || { k: 0, n: 0 }; per[it.b].n++; if (checked[i]) per[it.b].k++; } });
-      var over = fakeN ? fakeK / fakeN : 0;
-      var total = 0, detail = [];
-      for (var b = 0; b < sizes.length; b++) { var pb = per[b] || { k: 0, n: 1 }; var frac = Math.max(0, pb.k / pb.n - over); total += frac * sizes[b]; detail.push(Math.round(frac * 100) + "%"); }
-      total = Math.round(total / 500) * 500;
-      var lv = total >= 9500 ? "优秀（可挑战六级/考研）" : total >= 6000 ? "良好（四级较稳）" : total >= 4000 ? "中等（四级需努力）" : "偏少（建议先猛攻词汇）";
-      document.getElementById("vt-res").innerHTML = '<div class="card" style="margin-top:12px;text-align:center"><div class="muted">估算词汇量（已按假词误认率 ' + Math.round(over * 100) + "% 校正）</div>" +
-        '<div style="font-size:40px;font-weight:800;color:var(--primary)">' + total + '</div><div>' + lv + '</div><div class="muted" style="margin-top:8px">各频段认识率：' + detail.join(" / ") + "</div></div>";
-    };
+  /* ---------- 单词量测试：英译汉/汉译英/拼写 → 阅读/听力/写作三维估算 ---------- */
+  function lev(a, b) {
+    a = String(a); b = String(b);
+    var m = a.length, n = b.length, i, j, cost, prev = [], cur = [];
+    if (!m) return n; if (!n) return m;
+    for (j = 0; j <= n; j++) prev[j] = j;
+    for (i = 1; i <= m; i++) {
+      cur[0] = i;
+      for (j = 1; j <= n; j++) {
+        cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+        cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      }
+      prev = cur.slice();
+    }
+    return prev[n];
+  }
+  function dashes(n) { var s = ""; for (var i = 0; i < n; i++) s += "_"; return s; }
+  function vtLabel(kind, v) {
+    if (kind === "reading") return v >= 8000 ? "优秀（可挑战六级/考研）" : v >= 5500 ? "良好（四级阅读较稳）" : v >= 3500 ? "中等（四级需加强）" : "起步（先扩大基础词量）";
+    if (kind === "listening") return v >= 7000 ? "优秀" : v >= 4500 ? "良好" : v >= 2500 ? "中等" : "起步（多做精听）";
+    return v >= 6000 ? "优秀" : v >= 3500 ? "良好" : v >= 2000 ? "中等" : "起步（多拼多写）";
+  }
+  function renderVocabTest() {
+    var VT = window.CET4_VTEST || { bands: [], pool: [] };
+    var bands = VT.bands || [], pool = VT.pool || [];
+    if (!pool.length || !bands.length) { main.innerHTML = '<div class="page"><div class="info">测试数据缺失，请检查 data/vocabtest.js。</div></div>'; return; }
+    var TOTAL_WORDS = bands.reduce(function (a, b) { return a + b.size; }, 0);
+
+    function statBox(n, l) { return '<div class="stat"><div class="n">' + n + '</div><div class="l">' + l + "</div></div>"; }
+    function pickDistractors(correct, field, band) {
+      var out = [], used = {}; used[correct] = 1;
+      var same = shuffle(pool.filter(function (x) { return x.b === band && x[field] !== correct; }));
+      same.forEach(function (x) { if (out.length < 3 && !used[x[field]]) { used[x[field]] = 1; out.push(x[field]); } });
+      if (out.length < 3) {
+        shuffle(pool.filter(function (x) { return x[field] !== correct; })).forEach(function (x) {
+          if (out.length < 3 && !used[x[field]]) { used[x[field]] = 1; out.push(x[field]); }
+        });
+      }
+      return out;
+    }
+    function mkChoice(type, x) {
+      var field = type === "c2e" ? "w" : "m", correct = x[field];
+      var opts = shuffle([correct].concat(pickDistractors(correct, field, x.b)));
+      return { type: type, x: x, opts: opts, ansIdx: opts.indexOf(correct) };
+    }
+    function buildItems(mode) {
+      var perBand = mode === "all" ? 4 : 5, chosen = [], b;
+      for (b = 0; b < bands.length; b++) {
+        shuffle(pool.filter(function (x) { return x.b === b; })).slice(0, perBand).forEach(function (x) { chosen.push(x); });
+      }
+      var items = [];
+      if (mode === "reading" || mode === "all") chosen.forEach(function (x) { items.push(mkChoice("reading", x)); });
+      if (mode === "listening" || mode === "all") chosen.forEach(function (x) { items.push(mkChoice("listening", x)); });
+      if (mode === "writing" || mode === "all") {
+        chosen.forEach(function (x) { items.push(mkChoice("c2e", x)); });
+        chosen.forEach(function (x) { items.push({ type: "spell", x: x }); });
+      }
+      return items;
+    }
+
+    function home() {
+      var mode = store("cet4_vt_mode", "all"), last = store("cet4_vt_history", []);
+      var modes = [["all", "综合（三项）"], ["reading", "阅读 · 英译汉"], ["listening", "听力 · 听音辨义"], ["writing", "写作 · 汉译英+拼写"]];
+      var html = '<div class="page"><div class="section-title">单词量测试</div>' +
+        '<div class="info">按<b>词频分段抽样</b>，用不同任务分别估算词汇量：<br>' +
+        '· <b>阅读词汇</b>＝英译汉（看单词选中文）<br>' +
+        '· <b>听力词汇</b>＝听音辨义（听发音选中文）<br>' +
+        '· <b>写作词汇</b>＝汉译英＋拼写（据中文写英文）<br>' +
+        '各频段掌握率 × 该段词数求和即得估算值（选择题已做猜对校正）。</div>' +
+        '<div class="card"><div class="section-title" style="margin-top:0">抽样频段（共约 ' + TOTAL_WORDS + ' 词）</div>' +
+        bands.map(function (b, i) { return '<div class="between" style="margin:4px 0"><span>第 ' + (i + 1) + ' 段</span><span class="muted">' + b.lo + "–" + b.hi + " 词 · 约 " + b.size + " 个</span></div>"; }).join("") +
+        "</div>" +
+        '<div class="section-title">测评方式</div><div class="row" style="flex-wrap:wrap;gap:8px">' +
+        modes.map(function (m) { return '<button class="btn ' + (mode === m[0] ? "" : "ghost") + '" data-mode="' + m[0] + '">' + m[1] + "</button>"; }).join("") + "</div>" +
+        '<button class="btn block" id="vt-start" style="margin-top:14px">开始测试</button>';
+      if (last.length) {
+        var r = last[last.length - 1];
+        html += '<div class="section-title" style="margin-top:16px">上次结果（' + esc(r.date) + '）</div><div class="card"><div class="stat-row">' +
+          (r.read != null ? statBox(r.read, "阅读词汇") : "") + (r.listen != null ? statBox(r.listen, "听力词汇") : "") + (r.write != null ? statBox(r.write, "写作词汇") : "") +
+          "</div></div>";
+      }
+      html += "</div>";
+      main.innerHTML = html;
+      main.querySelectorAll("[data-mode]").forEach(function (btn) {
+        btn.onclick = function () { saveStore("cet4_vt_mode", btn.getAttribute("data-mode")); home(); };
+      });
+      document.getElementById("vt-start").onclick = function () { run(store("cet4_vt_mode", "all")); };
+    }
+
+    function run(mode) {
+      var items = buildItems(mode), answers = {}, i = 0;
+      function phaseOf(type) { return type === "reading" ? "阅读 · 英译汉" : type === "listening" ? "听力 · 听音辨义" : type === "c2e" ? "写作 · 汉译英" : "写作 · 拼写"; }
+      function optList(it) {
+        var h = "";
+        it.opts.forEach(function (o, oi) { h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + ".</span><span>" + esc(o) + "</span></div>"; });
+        return h;
+      }
+      function draw() {
+        if (i >= items.length) { results(mode, items, answers, false); return; }
+        var it = items[i], x = it.x;
+        var head = '<div class="between"><span class="muted">' + phaseOf(it.type) + " · " + (i + 1) + " / " + items.length + '</span></div><div class="progress"><i style="width:' + Math.round(i / items.length * 100) + '%"></i></div>';
+        var b = "";
+        if (it.type === "reading") {
+          b = '<div class="card" style="text-align:center"><div class="muted">这个单词的中文意思是？</div>' +
+            '<div style="font-size:34px;font-weight:800;color:var(--primary);margin:8px 0">' + esc(x.w) + "</div>" +
+            '<div class="muted">' + (x.p ? "/" + esc(x.p) + "/ " : "") + '<button class="star" id="vt-say">🔊</button></div></div>' + optList(it);
+        } else if (it.type === "listening") {
+          b = '<div class="card" style="text-align:center"><div class="muted">听发音，选出正确的中文含义</div>' +
+            '<div style="margin:12px 0"><button class="btn" id="vt-say">🔊 播放 / 重听</button></div></div>' + optList(it);
+        } else if (it.type === "c2e") {
+          b = '<div class="card" style="text-align:center"><div class="muted">下列中文含义对应的单词是？</div>' +
+            '<div style="font-size:19px;line-height:1.6;margin:10px 0">' + esc(x.m) + '</div><button class="star" id="vt-say">🔊</button></div>' + optList(it);
+        } else {
+          b = '<div class="card" style="text-align:center"><div class="muted">根据中文含义拼写单词</div>' +
+            '<div style="font-size:20px;line-height:1.6;margin:10px 0">' + esc(x.m) + "</div>" +
+            '<div class="muted">提示 <b>' + esc(x.w.charAt(0)) + " " + dashes(Math.max(0, x.w.length - 1)) + "</b>（" + x.w.length + ' 个字母） <button class="star" id="vt-say">🔊</button></div>' +
+            '<input type="text" id="vt-in" placeholder="输入英文单词…" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:12px"></div>' +
+            '<button class="btn block" id="vt-next" style="margin-top:10px">下一题</button>';
+        }
+        main.innerHTML = '<div class="page"><div id="backslot"></div>' + head + b + '<div class="center" style="margin-top:12px"><button class="btn ghost small" id="vt-quit">结束测试</button></div></div>';
+        document.getElementById("backslot").appendChild(backBar("返回", home));
+        var say = document.getElementById("vt-say"); if (say) say.onclick = function () { speak(x.w); };
+        if (it.type === "listening") speak(x.w);
+        if (it.type === "spell") {
+          var inp = document.getElementById("vt-in"); inp.focus();
+          function submit() { answers[i] = inp.value.trim(); i++; draw(); }
+          document.getElementById("vt-next").onclick = submit;
+          inp.onkeydown = function (e) { if (e.key === "Enter") submit(); };
+        } else {
+          var opts = main.querySelectorAll(".opt");
+          opts.forEach(function (el) {
+            el.onclick = function () {
+              opts.forEach(function (o) { o.classList.remove("sel"); });
+              el.classList.add("sel");
+              answers[i] = parseInt(el.getAttribute("data-oi"), 10);
+              setTimeout(function () { i++; draw(); }, 170);
+            };
+          });
+        }
+        document.getElementById("vt-quit").onclick = function () { results(mode, items, answers, true); };
+      }
+      draw();
+    }
+
+    function results(mode, items, answers, aborted) {
+      var stat = {};
+      function acc(skill, b) { stat[skill] = stat[skill] || {}; stat[skill][b] = stat[skill][b] || { n: 0, k: 0 }; return stat[skill][b]; }
+      items.forEach(function (it, idx) {
+        var a = answers[idx], s;
+        if (it.type === "spell") {
+          var v = String(a == null ? "" : a).trim().toLowerCase(), credit = 0;
+          if (v) credit = v === it.x.w ? 1 : (lev(v, it.x.w) === 1 ? 0.5 : 0);
+          s = acc("writing_spell", it.x.b); s.n++; s.k += credit;
+        } else {
+          var skill = it.type === "reading" ? "reading" : it.type === "listening" ? "listening" : "writing_c2e";
+          s = acc(skill, it.x.b); s.n++; if (a != null && a === it.ansIdx) s.k++;
+        }
+      });
+      function corrected(k, n, g) { if (!n) return 0; var p = k / n; return Math.max(0, Math.min(1, (p - g) / (1 - g))); }
+      function est(parts) {
+        var total = 0, va = 0;
+        for (var b = 0; b < bands.length; b++) {
+          var p = 0, wsum = 0, vv = 0;
+          parts.forEach(function (sp) {
+            var s = (stat[sp.skill] || {})[b];
+            if (!s || !s.n) return;
+            var pp = corrected(s.k, s.n, sp.guess);
+            p += pp * sp.weight; wsum += sp.weight;
+            vv += (sp.weight * sp.weight) * (pp * (1 - pp) / s.n) / ((1 - sp.guess) * (1 - sp.guess));
+          });
+          if (wsum > 0) p = p / wsum;
+          total += p * bands[b].size; va += vv * bands[b].size * bands[b].size;
+        }
+        return { n: Math.round(total / 100) * 100, m: Math.round(1.96 * Math.sqrt(va) / 100) * 100 };
+      }
+      var read = est([{ skill: "reading", weight: 1, guess: 0.25 }]);
+      var listen = est([{ skill: "listening", weight: 1, guess: 0.25 }]);
+      var write = est([{ skill: "writing_c2e", weight: 0.5, guess: 0.25 }, { skill: "writing_spell", weight: 0.5, guess: 0 }]);
+      var hasRead = mode === "reading" || mode === "all", hasListen = mode === "listening" || mode === "all", hasWrite = mode === "writing" || mode === "all";
+      function pctOf(skill, b) { var s = (stat[skill] || {})[b]; if (!s || !s.n) return "—"; return Math.round(s.k / s.n * 100) + "%"; }
+      if (!aborted) {
+        var h = store("cet4_vt_history", []);
+        h.push({ date: todayKey(), mode: mode, read: hasRead ? read.n : null, listen: hasListen ? listen.n : null, write: hasWrite ? write.n : null });
+        saveStore("cet4_vt_history", h);
+      }
+      var html = '<div class="page"><div class="section-title">测试结果</div><div class="card"><div class="stat-row">' +
+        (hasRead ? statBox(read.n, "阅读词汇") : "") + (hasListen ? statBox(listen.n, "听力词汇") : "") + (hasWrite ? statBox(write.n, "写作词汇") : "") +
+        '</div><div class="muted" style="margin-top:8px">误差约 ±' + Math.max(read.m, listen.m, write.m) + " 词（95% 置信）。" + (aborted ? "（提前结束，未答项计为不会）" : "") + "</div></div>";
+      if (hasRead) html += '<div class="info">阅读词汇 ≈ <b>' + read.n + "</b>（±" + read.m + "）：" + vtLabel("reading", read.n) + "</div>";
+      if (hasListen) html += '<div class="info">听力词汇 ≈ <b>' + listen.n + "</b>（±" + listen.m + "）：" + vtLabel("listening", listen.n) + "（基于浏览器语音合成，设备无英文语音时会偏低）</div>";
+      if (hasWrite) html += '<div class="info">写作词汇 ≈ <b>' + write.n + "</b>（±" + write.m + "）：" + vtLabel("writing", write.n) + "</div>";
+      html += '<div class="card"><div class="section-title" style="margin-top:0">各频段掌握率</div>' +
+        '<div class="between muted" style="font-size:12px"><span>频段</span><span>' + (hasRead ? "阅读　" : "") + (hasListen ? "听力　" : "") + (hasWrite ? "汉译/拼写" : "") + "</span></div>";
+      for (var bi2 = 0; bi2 < bands.length; bi2++) {
+        var wcell = hasWrite ? (pctOf("writing_c2e", bi2) + "/" + pctOf("writing_spell", bi2)) : "";
+        html += '<div class="between" style="margin:4px 0"><span>' + bands[bi2].lo + "–" + bands[bi2].hi + '</span><span class="muted">' +
+          (hasRead ? pctOf("reading", bi2) + "　" : "") + (hasListen ? pctOf("listening", bi2) + "　" : "") + wcell + "</span></div>";
+      }
+      html += "</div>" +
+        '<button class="btn block" id="vt-again" style="margin-top:12px">用同样方式重测</button>' +
+        '<button class="btn ghost block" id="vt-home2" style="margin-top:8px">返回</button></div>';
+      main.innerHTML = html;
+      document.getElementById("vt-again").onclick = function () { run(mode); };
+      document.getElementById("vt-home2").onclick = home;
+    }
+
+    home();
   }
 
   /* ---------- 背单词（百词斩式：成组·递推·不即时判） ---------- */
@@ -2147,13 +2331,17 @@
   function lookupWord(word, container) {
     var w = String(word).toLowerCase();
     function render(d) {
+      var id = w.replace(/[^a-z]/g, "");
       container.innerHTML = '<div class="info" style="margin-top:8px"><b>' + esc(word) + "</b> " + (d.ph ? esc(d.ph) : "") +
-        (d.audio ? ' <button class="btn ghost small" id="dic-play-' + w.replace(/[^a-z]/g, "") + '">🔊</button>' : "") +
+        ' <button class="btn ghost small" id="dic-play-' + id + '">🔊</button>' +
         '<div style="margin-top:6px">' + esc(d.def || "") + "</div>" + (d.ex ? '<div class="muted" style="margin-top:4px">例：' + esc(d.ex) + "</div>" : "") + "</div>";
-      var pb = document.getElementById("dic-play-" + w.replace(/[^a-z]/g, "")); if (pb && d.audio) pb.onclick = function () { try { new Audio(d.audio).play(); } catch (e) { speak(word); } };
+      var pb = document.getElementById("dic-play-" + id);
+      if (pb) pb.onclick = function () { if (d.audio) { try { new Audio(d.audio).play(); return; } catch (e) { } } speak(word); };
     }
     var cache = store("cet4_dict", {});
     if (cache[w]) { render(cache[w]); return; }
+    var off = (window.CET4_DICT || {})[w];
+    if (off && (off[0] || off[1])) { render({ ph: off[0], def: off[1], ex: "", audio: "" }); return; }
     container.innerHTML = '<div class="muted" style="margin-top:8px">查询中…</div>';
     fetch("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(w))
       .then(function (r) { return r.ok ? r.json() : null; })

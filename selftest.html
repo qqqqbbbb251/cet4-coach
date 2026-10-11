@@ -24,18 +24,19 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=6"></script>
-<script src="data/zhenti.js?v=6"></script>
-<script src="data/zaudio.js?v=6"></script>
-<script src="data/wordmeta.js?v=6"></script>
-<script src="data/roots.js?v=6"></script>
-<script src="data/eztor.js?v=6"></script>
-<script src="data/papers.js?v=6"></script>
-<script src="data/words_extra.js?v=6"></script>
-<script src="data/vocabtest.js?v=6"></script>
-<script src="data/wordcolloc.js?v=6"></script>
-<script src="data/voa.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="data/data.js?v=7"></script>
+<script src="data/zhenti.js?v=7"></script>
+<script src="data/zaudio.js?v=7"></script>
+<script src="data/wordmeta.js?v=7"></script>
+<script src="data/roots.js?v=7"></script>
+<script src="data/eztor.js?v=7"></script>
+<script src="data/papers.js?v=7"></script>
+<script src="data/words_extra.js?v=7"></script>
+<script src="data/vocabtest.js?v=7"></script>
+<script src="data/wordcolloc.js?v=7"></script>
+<script src="data/voa.js?v=7"></script>
+<script src="data/dict.js?v=7"></script>
+<script src="app.js?v=7"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -48,7 +49,7 @@
     document.title = "SELFTEST " + (fail ? "FAIL" : "PASS") + " " + pass + "/" + (pass + fail) + (fail ? (" (" + out.filter(function (l) { return l.indexOf("FAIL") === 0; }).join(" | ") + ")") : "");
   }
 
-  /* ---- 用假 fetch 拦截 AI 与词典请求，无需真实 Key ---- */
+  /* ---- 假 fetch 拦截 AI 与词典请求 ---- */
   var origFetch = window.fetch;
   window.fetch = function (url, opts) {
     url = String(url);
@@ -61,18 +62,22 @@
     }
     return origFetch ? origFetch.apply(window, arguments) : Promise.reject(new Error("no fetch"));
   };
+  /* ---- 无头环境没有语音，stub 掉 TTS ---- */
+  try {
+    window.SpeechSynthesisUtterance = window.SpeechSynthesisUtterance || function () { };
+    if (!window.speechSynthesis) window.speechSynthesis = { speak: function () { }, getVoices: function () { return []; } };
+  } catch (e) { }
 
   localStorage.setItem("cet4_settings", JSON.stringify({ apiKey: "test-key", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" }));
-  ["cet4_progress", "cet4_wrong", "cet4_srs", "cet4_records"].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { } });
+  ["cet4_progress", "cet4_wrong", "cet4_srs", "cet4_records", "cet4_vt_history"].forEach(function (k) { try { localStorage.removeItem(k); } catch (e) { } });
 
   function q(s, r) { return (r || document).querySelector(s); }
   function qa(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
 
-  /* ---- 1. 首页渲染 6 大分类 ---- */
   q("#btn-home").click();
   ok("home renders 6 categories", qa("#main [data-cat]").length === 6, "got " + qa("#main [data-cat]").length);
+  ok("offline dictionary loaded", !!window.CET4_DICT && Object.keys(window.CET4_DICT).length >= 8000, "entries=" + (window.CET4_DICT ? Object.keys(window.CET4_DICT).length : 0));
 
-  /* ---- 2. 每个分类下的每个模块都能打开且不报错 ---- */
   var cats = ["words", "exam", "skill", "ai", "me", "more"];
   cats.forEach(function (c) {
     q("#btn-home").click();
@@ -95,7 +100,6 @@
     });
   });
 
-  /* ---- 3. 背单词界面能渲染单词卡 ---- */
   try {
     q("#btn-home").click();
     q('#main [data-cat="words"]').click();
@@ -103,24 +107,53 @@
     ok("vocab study renders cards", qa("#vocab-body .card").length > 0);
   } catch (e) { ok("vocab study renders cards", false, String(e)); }
 
-  /* ---- 4. AI 作文批改流程（假 fetch） ---- */
-  try {
-    q("#btn-home").click();
-    q('#main [data-cat="skill"]').click();
-    q('#main [data-go="writing"]').click();
-    var item = q('#main [data-idx="0"]');
-    ok("writing list has items", !!item);
-    item.click();
-    var ta = q("#wr-text");
-    ok("writing detail has textarea", !!ta);
-    ta.value = "With the rapid development of society, many people pay attention to education. It is important for us to study hard and never give up.";
-    q("#wr-grade").click();
-    setTimeout(function () {
-      var res = q("#wr-result .ai-result");
-      ok("AI essay grade rendered", !!res && /综合得分/.test(res.textContent));
-      finish();
-    }, 1200);
-  } catch (e) { ok("AI essay grade flow", false, String(e)); finish(); }
+  function testVocabThenAI() {
+    /* ---- 单词量测试：阅读模式，程序自动作答到出结果 ---- */
+    try {
+      localStorage.setItem("cet4_vt_mode", "reading");
+      q("#btn-home").click();
+      q('#main [data-cat="words"]').click();
+      q('#main [data-go="vtest"]').click();
+      ok("vocab-test intro renders", !!q("#vt-start"));
+      q("#vt-start").click();
+      var guard = 0;
+      var timer = setInterval(function () {
+        if (q("#vt-again")) {
+          clearInterval(timer);
+          ok("vocab-test results render", /阅读词汇/.test(document.getElementById("main").textContent));
+          testAI();
+          return;
+        }
+        if (++guard > 400) { clearInterval(timer); ok("vocab-test completes", false, "timeout"); testAI(); return; }
+        var opt = q("#main .opt");
+        if (opt) { opt.click(); return; }
+        var inp = q("#vt-in");
+        if (inp) { inp.value = ""; var nb = q("#vt-next"); if (nb) nb.click(); }
+      }, 200);
+    } catch (e) { ok("vocab-test flow", false, String(e)); testAI(); }
+  }
+
+  function testAI() {
+    try {
+      q("#btn-home").click();
+      q('#main [data-cat="skill"]').click();
+      q('#main [data-go="writing"]').click();
+      var item = q('#main [data-idx="0"]');
+      ok("writing list has items", !!item);
+      item.click();
+      var ta = q("#wr-text");
+      ok("writing detail has textarea", !!ta);
+      ta.value = "With the rapid development of society, many people pay attention to education. It is important for us to study hard and never give up.";
+      q("#wr-grade").click();
+      setTimeout(function () {
+        var res = q("#wr-result .ai-result");
+        ok("AI essay grade rendered", !!res && /综合得分/.test(res.textContent));
+        finish();
+      }, 1200);
+    } catch (e) { ok("AI essay grade flow", false, String(e)); finish(); }
+  }
+
+  testVocabThenAI();
 })();
 </script>
 </body>
