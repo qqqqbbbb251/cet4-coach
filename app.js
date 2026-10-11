@@ -359,7 +359,7 @@
   var CATS = [
     { k: "words", t: "背单词", d: "背单词 · 复习 · 词书 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "review", "vtest", "vrecords", "roots", "fav"] },
     { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
-    { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 素材 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "writinglib", "grammar", "collocations"] },
+    { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 错词本 · 搭配本 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "writinglib", "errbook", "collocbook", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
     { k: "me", t: "我的学习", d: "计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav", "monitor"] },
     { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
@@ -381,6 +381,8 @@
     translation: { t: "翻译练习", d: "12 篇汉译英 · AI 批改", ic: "译", c: "#5E35B1" },
     writing: { t: "作文批改", d: "12 道题 · AI 评分与范文", ic: "文", c: "#8E24AA" },
     writinglib: { t: "写作素材库", d: "高分句型 · 万能表达 · 我的好句", ic: "素", c: "#7B1FA2" },
+    errbook: { t: "错词本", d: "批改提取的错词/错搭配 · 记忆曲线复习", ic: "错", c: "#C62828" },
+    collocbook: { t: "搭配本", d: "写作高频搭配 + 你的错搭配", ic: "搭", c: "#00695C" },
     grammar: { t: "语法要点", d: "15 个核心语法专题", ic: "法", c: "#2E7D32" },
     collocations: { t: "常用短语", d: "126 个高频搭配", ic: "搭", c: "#00838F" },
     ocr: { t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 建议", ic: "拍", c: "#D81B60" },
@@ -752,7 +754,7 @@
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("wr-result"); res.innerHTML = "";
       gradeEssay(s.prompt, ta.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><button class="btn block" id="aiCompose" style="margin-top:10px">把本次批改 + 客观题 记为一次考试</button>'; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">提取到错词本</button></div>'; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -792,7 +794,7 @@
       var btn = this, old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("tr-result"); res.innerHTML = "";
       gradeTranslation(s.prompt, s.reference, input.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><button class="btn block" id="aiCompose" style="margin-top:10px">把本次批改 + 客观题 记为一次考试</button>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">提取到错词本</button></div>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -1116,8 +1118,8 @@
     var old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
     res.innerHTML = "";
     fn().then(function (md) {
-      res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>" + (kind ? '<button class="btn block" id="aiCompose" style="margin-top:10px">把本次批改 + 客观题 记为一次考试</button>' : "");
-      if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; }
+      res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>" + (kind ? '<div class="row" style="margin-top:10px"><button class="btn" id="aiCompose" style="flex:1">记为一次考试</button><button class="btn outline" id="aiExtract" style="flex:1">提取到错词本</button></div>' : "");
+      if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; var eb = document.getElementById("aiExtract"); if (eb) eb.onclick = function () { extractErrors(md, eb); }; }
     })
       .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
       .then(function () { btn.disabled = false; btn.textContent = old; });
@@ -2234,6 +2236,146 @@
     };
   }
 
+  /* ---------- 错词本 / 搭配本 ---------- */
+  var WRITING_COLLOC = [
+    ["play an important role in", "在…中起重要作用"],
+    ["attach importance to", "重视"],
+    ["make a contribution to", "对…做贡献"],
+    ["take measures to", "采取措施"],
+    ["be essential to", "对…至关重要"],
+    ["have a positive effect on", "对…有积极影响"],
+    ["be beneficial to", "对…有益"],
+    ["be aware of", "意识到"],
+    ["take ... into account", "把…考虑在内"],
+    ["pay attention to", "注意"],
+    ["in terms of", "就…而言"],
+    ["as a result of", "由于"],
+    ["be responsible for", "对…负责"],
+    ["keep pace with", "跟上"],
+    ["broaden one's horizons", "开阔视野"],
+    ["enrich one's knowledge", "丰富知识"],
+    ["raise one's awareness of", "提高…意识"],
+    ["lay a solid foundation for", "为…打下坚实基础"],
+    ["make full use of", "充分利用"],
+    ["adapt to", "适应"],
+    ["be committed to", "致力于"],
+    ["give priority to", "优先考虑"],
+    ["in response to", "作为对…的回应"],
+    ["contribute to", "有助于；促成"],
+    ["result in", "导致"],
+    ["lead to", "导致"],
+    ["account for", "解释；占（比例）"],
+    ["cope with", "应对"],
+    ["be faced with", "面临"],
+    ["devote oneself to", "致力于"],
+    ["make great progress in", "在…取得巨大进步"],
+    ["have access to", "有机会/能使用"],
+    ["keep a balance between", "在…之间保持平衡"],
+    ["take advantage of", "利用"],
+    ["in the long run", "从长远看"],
+    ["from my perspective", "在我看来"],
+    ["it is universally acknowledged that", "众所周知"],
+    ["there is no doubt that", "毫无疑问"],
+    ["with the development of", "随着…的发展"],
+    ["a growing number of", "越来越多的"],
+    ["make efforts to", "努力去做"],
+    ["be closely related to", "与…密切相关"],
+    ["put emphasis on", "强调"]
+  ];
+  function getErrBook() { return store("cet4_errbook", []); }
+  function saveErrBook(a) { saveStore("cet4_errbook", a); }
+  function addErrItems(items) {
+    var a = getErrBook(); var seen = {}; a.forEach(function (x) { seen[(x.wrong + "|" + x.correct).toLowerCase()] = 1; });
+    var n = 0;
+    (items || []).forEach(function (it) {
+      if (!it || !it.wrong || !it.correct) return;
+      var k = (it.wrong + "|" + it.correct).toLowerCase();
+      if (seen[k]) return; seen[k] = 1;
+      a.push({ id: String(Date.now()) + Math.floor(Math.random() * 1000), wrong: String(it.wrong).trim(), correct: String(it.correct).trim(), type: it.type || "词汇", note: it.note || "", date: todayKey(), box: 0, due: dstr(0) });
+      n++;
+    });
+    saveErrBook(a); return n;
+  }
+  function extractErrors(md, btn) {
+    if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+    var old = btn.textContent; btn.disabled = true; btn.textContent = "提取中…";
+    var prompt = "你是英语批改助手。请从下面的作文/翻译批改反馈中，抽取学生所有的错误单词与错误搭配/表达。\n" +
+      '只输出 JSON 对象：{"items":[{"wrong":"学生写错的词或短语","correct":"正确写法","type":"拼写|搭配|语法|时态|介词|词汇","note":"一句话说明"}]}\n' +
+      "只提取确实存在的错误；correct 为正确表达。\n\n【批改内容】\n" + (md || "").slice(0, 4000);
+    callAI([{ role: "system", content: "只输出 JSON。" }, { role: "user", content: prompt }])
+      .then(function (txt) { var m = txt.match(/\{[\s\S]*\}/); var obj = m ? JSON.parse(m[0]) : { items: [] }; var n = addErrItems(obj.items || []); toast("已提取 " + n + " 条到错词本"); btn.textContent = "已提取 " + n + " 条"; })
+      .catch(function (e) { toast("提取失败：" + e.message); btn.disabled = false; btn.textContent = old; });
+  }
+  function reviewErrItems(items, title) {
+    if (!items.length) { toast("没有需要复习的"); return; }
+    items = shuffle(items.slice()).slice(0, 30);
+    var i = 0;
+    (function draw() {
+      if (i >= items.length) { main.innerHTML = '<div class="page"><div class="card" style="text-align:center"><h2>完成 🎉</h2><button class="btn" id="eb-back">返回错词本</button></div></div>'; document.getElementById("eb-back").onclick = renderErrBook; return; }
+      var x = items[i];
+      main.innerHTML = '<div class="page"><div class="between"><span class="muted">' + esc(title) + " · " + (i + 1) + "/" + items.length + '</span></div>' +
+        '<div class="card" style="text-align:center"><div class="muted">错误的写法</div><div style="font-size:22px;color:#c62828;margin:8px 0">' + esc(x.wrong) + '</div>' +
+        '<div id="eb-bk" style="display:none;margin-top:12px"><div class="muted">正确</div><div style="font-size:20px;color:#2e7d32;margin:6px 0">' + esc(x.correct) + "</div>" + (x.note ? '<div class="muted">' + esc(x.note) + "</div>" : "") + "</div></div>" +
+        '<div id="eb-ctl"><button class="btn block" id="eb-show">显示正确</button></div></div>';
+      document.getElementById("eb-show").onclick = function () { document.getElementById("eb-bk").style.display = "block"; document.getElementById("eb-ctl").innerHTML = '<div class="row"><button class="btn ghost" id="eb-no" style="flex:1">还没记住</button><button class="btn" id="eb-yes" style="flex:1">记住了</button></div>'; document.getElementById("eb-no").onclick = function () { upd(false); }; document.getElementById("eb-yes").onclick = function () { upd(true); }; };
+      function upd(ok) { var a = getErrBook(); var it = a.filter(function (y) { return String(y.id) === String(x.id); })[0]; if (it) { it.box = ok ? Math.min(6, (it.box || 0) + 1) : 0; it.due = dstr(SRS_INT[it.box]); saveErrBook(a); } i++; draw(); }
+    })();
+  }
+  function renderErrBook() {
+    var a = getErrBook(); var t = todayKey();
+    var due = a.filter(function (x) { return (x.due || "") <= t; }).length;
+    var html = '<div class="page"><div class="section-title">错词本（' + a.length + '）</div>' +
+      '<div class="info">从你的作文/翻译批改里提取的错词与错搭配，按记忆曲线复习，改到不再犯。在批改结果处点「提取到错词本」即可加入。</div>' +
+      '<div class="row" style="margin-bottom:12px"><button class="btn" id="eb-due">记忆曲线复习（到期 ' + due + '）</button><button class="btn ghost" id="eb-all">全部复习</button></div>' +
+      '<div class="card"><div class="row"><input type="text" id="eb-w" placeholder="错的（词/短语）" style="flex:1"><input type="text" id="eb-c" placeholder="正确的" style="flex:1"><select id="eb-t" style="flex:0 0 96px"><option>拼写</option><option>搭配</option><option>语法</option><option>时态</option><option>介词</option><option>词汇</option></select></div><button class="btn block" id="eb-add" style="margin-top:8px">手动添加</button></div>';
+    if (!a.length) html += '<div class="info">还没有条目。</div>';
+    a.slice().reverse().forEach(function (x) { html += '<div class="card"><div class="between"><span><b style="color:#c62828">' + esc(x.wrong) + '</b> → <b style="color:#2e7d32">' + esc(x.correct) + '</b></span><span class="muted">' + esc(x.type) + ' <button class="star" data-del="' + esc(x.id) + '" style="color:#c62828">×</button></span></div>' + (x.note ? '<div class="muted" style="margin-top:4px">' + esc(x.note) + "</div>" : "") + "</div>"; });
+    html += "</div>";
+    main.innerHTML = html;
+    document.getElementById("eb-due").onclick = function () { reviewErrItems(a.filter(function (x) { return (x.due || "") <= t; }), "到期错词"); };
+    document.getElementById("eb-all").onclick = function () { reviewErrItems(a, "错词复习"); };
+    document.getElementById("eb-add").onclick = function () { var w = document.getElementById("eb-w").value.trim(), c = document.getElementById("eb-c").value.trim(); if (!w || !c) { toast("请填写错的和对的"); return; } addErrItems([{ wrong: w, correct: c, type: document.getElementById("eb-t").value }]); renderErrBook(); };
+    main.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = function () { saveErrBook(getErrBook().filter(function (x) { return String(x.id) !== b.getAttribute("data-del"); })); renderErrBook(); }; });
+  }
+  function collocList() {
+    var custom = store("cet4_colloc_custom", []);
+    var builtin = WRITING_COLLOC.map(function (x) { return { en: x[0], zh: x[1], src: "内置" }; });
+    var her = getErrBook().filter(function (x) { return x.type === "搭配"; }).map(function (x) { return { en: x.correct, zh: x.note || "", src: "我的", wrong: x.wrong }; });
+    return custom.map(function (x) { return { en: x.en, zh: x.zh, src: "我的" }; }).concat(builtin).concat(her);
+  }
+  function renderCollocBook() {
+    var list = collocList();
+    var srs = store("cet4_colloc_srs", {}); var t = todayKey();
+    var due = list.filter(function (x) { return (srs[x.en] && srs[x.en].d || "") <= t; }).length;
+    var html = '<div class="page"><div class="section-title">搭配本（' + list.length + '）</div>' +
+      '<div class="info">写作高频搭配（内置）+ 你的错搭配 + 自加，按记忆曲线复习。</div>' +
+      '<div class="row" style="margin-bottom:12px"><button class="btn" id="cb-due">记忆曲线复习（到期 ' + due + '）</button><button class="btn ghost" id="cb-all">全部复习</button></div>' +
+      '<div class="card"><div class="row"><input type="text" id="cb-en" placeholder="英文搭配" style="flex:2"><input type="text" id="cb-zh" placeholder="中文意思" style="flex:1"></div><button class="btn block" id="cb-add" style="margin-top:8px">添加</button></div>';
+    list.forEach(function (x) {
+      html += '<div class="card"><div class="between"><b style="color:var(--primary)">' + esc(x.en) + '</b><span class="muted">' + esc(x.src) + (x.src === "内置" ? "" : (x.wrong ? " · 原错：" + esc(x.wrong) : "")) + "</span></div>" + (x.zh ? '<div class="muted" style="margin-top:4px">' + esc(x.zh) + "</div>" : "") + "</div>";
+    });
+    html += "</div>";
+    main.innerHTML = html;
+    document.getElementById("cb-due").onclick = function () { reviewColloc(list.filter(function (x) { return (srs[x.en] && srs[x.en].d || "") <= t; }), "到期搭配"); };
+    document.getElementById("cb-all").onclick = function () { reviewColloc(list, "搭配复习"); };
+    document.getElementById("cb-add").onclick = function () { var en = document.getElementById("cb-en").value.trim(), zh = document.getElementById("cb-zh").value.trim(); if (!en) { toast("请填英文搭配"); return; } var c = store("cet4_colloc_custom", []); c.push({ en: en, zh: zh }); saveStore("cet4_colloc_custom", c); renderCollocBook(); };
+  }
+  function reviewColloc(list, title) {
+    if (!list.length) { toast("没有需要复习的"); return; }
+    list = shuffle(list.slice()).slice(0, 30);
+    var i = 0;
+    (function draw() {
+      if (i >= list.length) { main.innerHTML = '<div class="page"><div class="card" style="text-align:center"><h2>完成 🎉</h2><button class="btn" id="cb-back">返回搭配本</button></div></div>'; document.getElementById("cb-back").onclick = renderCollocBook; return; }
+      var x = list[i];
+      main.innerHTML = '<div class="page"><div class="between"><span class="muted">' + esc(title) + " · " + (i + 1) + "/" + list.length + '</span></div>' +
+        '<div class="card" style="text-align:center"><div class="muted">中文意思</div><div style="font-size:20px;margin:8px 0">' + esc(x.zh || "（练习记忆）") + '</div>' +
+        '<div id="cb-bk" style="display:none;margin-top:12px;font-size:20px;color:var(--primary)">' + esc(x.en) + "</div></div>" +
+        '<div id="cb-ctl"><button class="btn block" id="cb-show">显示英文</button></div></div>';
+      document.getElementById("cb-show").onclick = function () { document.getElementById("cb-bk").style.display = "block"; document.getElementById("cb-ctl").innerHTML = '<div class="row"><button class="btn ghost" id="cb-no" style="flex:1">还没记住</button><button class="btn" id="cb-yes" style="flex:1">记住了</button></div>'; document.getElementById("cb-no").onclick = function () { upd(false); }; document.getElementById("cb-yes").onclick = function () { upd(true); }; };
+      function upd(ok) { var s = store("cet4_colloc_srs", {}); var r = s[x.en] || { b: 0 }; r.b = ok ? Math.min(6, (r.b || 0) + 1) : 0; r.d = dstr(SRS_INT[r.b]); s[x.en] = r; saveStore("cet4_colloc_srs", s); i++; draw(); }
+    })();
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -2300,6 +2442,8 @@
     else if (name === "listening") renderListeningList();
     else if (name === "writing") renderWritingList();
     else if (name === "writinglib") renderWritingLib();
+    else if (name === "errbook") renderErrBook();
+    else if (name === "collocbook") renderCollocBook();
     else if (name === "translation") renderTranslationList();
     else if (name === "grammar") renderGrammarList();
     else if (name === "collocations") renderCollocations();
