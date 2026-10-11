@@ -111,12 +111,19 @@
   function wmeta(w) { return (window.CET4_WORDMETA || {})[w] || { f5: 0, f10: 0, d: "" }; }
   function bookWords(key) {
     var meta = window.CET4_WORDMETA || {};
-    if (key === "fav") { var f = getFav(); return DATA.words.filter(function (w) { return f[w.w] != null; }); }
+    var ex = window.CET4_EXTRA || {};
+    if (key === "fav") { var f = getFav(); return Object.keys(f).map(function (w) { return { w: w, p: "", m: f[w] }; }); }
+    if (ex[key]) return ex[key];
     if (key === "f5") return DATA.words.filter(function (w) { return (meta[w.w] || {}).f5 >= 8; });
     if (key === "f10") return DATA.words.filter(function (w) { return (meta[w.w] || {}).f10 >= 15; });
     if (["基础", "中级", "较难", "高阶"].indexOf(key) >= 0) return DATA.words.filter(function (w) { return (meta[w.w] || {}).d === key; });
-    return DATA.words.slice();
-  }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+    var ws = DATA.words.slice();
+    if (store("cet4_nosimple", false)) ws = ws.filter(function (w) { return (((meta[w.w] || {}).lv) || []).indexOf("zk") < 0; });
+    return ws;
+  }
+  function getVocabLog() { return store("cet4_vocab", { days: {}, learned: {}, total: 0 }); }
+  function saveVocabLog(v) { saveStore("cet4_vocab", v); }
+  function exampleOf(word) { var v = (DATA.vocabulary || []).filter(function (x) { return x.word === word; })[0]; return v ? v.example : ""; }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -284,7 +291,7 @@
   }
 
   var CATS = [
-    { k: "words", t: "背单词", d: "单词卡 · 中译英 · 拼写 · 词书 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "roots", "fav"] },
+    { k: "words", t: "背单词", d: "背单词 · 词书 · 拼写 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "vtest", "vrecords", "roots", "fav"] },
     { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
     { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
@@ -294,6 +301,8 @@
   var MODS = {
     vocab: { t: "单词检测", d: "单词卡 · 中译英 · 拼写 · 词书 · 重点词 · 生词本", ic: "Aa", c: "#3949AB" },
     roots: { t: "词根词缀", d: "300 个词根词缀 · 例词 + 小测", ic: "根", c: "#00838F" },
+    vtest: { t: "单词量测试", d: "估算你的词汇量", ic: "测", c: "#00838F" },
+    vrecords: { t: "背单词记录", d: "每日背词量 · 打卡", ic: "录", c: "#C8860A" },
     fav: { t: "生词本", d: "收藏的重点词汇", ic: "★", c: "#C8860A" },
     zhenti: { t: "历年真题", d: "76 套（2015–2026）· 3325 题 · 含答案解析", ic: "卷", c: "#B71C1C" },
     eztor: { t: "原创模拟", d: "2 套原创模拟卷 · 55 题含答案解析", ic: "拟", c: "#6A1B9A" },
@@ -386,20 +395,20 @@
   /* ---------- vocab ---------- */
   function renderVocab() {
     main.innerHTML = '<div class="page"><div class="tabs">' +
-      '<button id="tab-card" class="active">单词卡</button>' +
+      '<button id="tab-study" class="active">背单词</button>' +
       '<button id="tab-quiz">词义测验</button>' +
       '<button id="tab-en">中译英</button>' +
       '<button id="tab-spell">拼写</button>' +
       '<button id="tab-book">词书</button>' +
       '<button id="tab-vip">重点词</button></div><div id="vocab-body"></div></div>';
     var body = document.getElementById("vocab-body");
-    document.getElementById("tab-card").onclick = function () { setTab(this); renderFlash(body); };
+    document.getElementById("tab-study").onclick = function () { setTab(this); renderStudy(body); };
     document.getElementById("tab-quiz").onclick = function () { setTab(this); renderQuiz(body); };
     document.getElementById("tab-en").onclick = function () { setTab(this); renderEnQuiz(body); };
     document.getElementById("tab-spell").onclick = function () { setTab(this); renderSpell(body); };
     document.getElementById("tab-book").onclick = function () { setTab(this); renderVocabBook(body); };
     document.getElementById("tab-vip").onclick = function () { setTab(this); renderVipVocab(body); };
-    renderFlash(body);
+    renderStudy(body);
   }
   function setTab(btn) { btn.parentNode.querySelectorAll("button").forEach(function (b) { b.classList.remove("active"); }); btn.classList.add("active"); }
   function renderFlash(body) {
@@ -542,7 +551,7 @@
     document.getElementById("vip-search").oninput = function () { draw(this.value); };
     draw("");
   }
-  function renderVocabBook(body) {
+  function renderVocabBookOld(body) {
     var books = [
       { k: "f5", t: "近5年真题·高频", d: "近5年出现 ≥ 8 次" },
       { k: "f10", t: "近10年真题·高频", d: "近10年出现 ≥ 15 次" },
@@ -1725,6 +1734,121 @@
     };
   }
 
+  /* ---------- 背单词（百词斩式） ---------- */
+  function renderStudy(body) {
+    var words = bookWords(store("cet4_book", "cet4"));
+    if (!words.length) { body.innerHTML = '<div class="info">当前词书为空，请到「词书」选择。</div>'; return; }
+    var spell = store("cet4_spellmode", false);
+    var order = shuffle(words.slice()).slice(0, 20);
+    var idx = 0, ok = 0, no = 0, review = [];
+    function draw() {
+      if (idx >= order.length) {
+        body.innerHTML = '<div class="card" style="text-align:center"><h2>本组完成 🎉</h2><p class="muted">认识 ' + ok + " · 不认识 " + no + "</p>" +
+          '<div class="row" style="justify-content:center;margin-top:10px">' + (review.length ? '<button class="btn" id="st-review">复习不认识的（' + review.length + '）</button>' : "") +
+          '<button class="btn ghost" id="st-next">再来一组</button></div></div>';
+        var rv = document.getElementById("st-review");
+        if (rv) rv.onclick = function () { order = review.slice(); idx = 0; ok = 0; no = 0; review = []; draw(); };
+        document.getElementById("st-next").onclick = function () { renderStudy(body); };
+        return;
+      }
+      var w = order[idx], mm = wmeta(w.w);
+      body.innerHTML = '<div class="between"><span class="muted">背单词 · ' + (idx + 1) + " / " + order.length + " · 认识 " + ok + '</span>' +
+        '<label class="muted" style="cursor:pointer"><input type="checkbox" id="st-spell" ' + (spell ? "checked" : "") + "> 边背边拼写</label></div>" +
+        '<div class="progress"><i style="width:' + (idx / order.length * 100) + '%"></i></div>' +
+        '<div class="flash" id="st-card"><div class="word">' + esc(w.w) + "</div>" + (w.p ? '<div class="phon">/' + esc(w.p) + "/</div>" : "") +
+        '<div class="muted" style="font-size:12px;margin-top:8px">近5年×' + mm.f5 + " · 难度：" + (mm.d || "—") + "</div></div>" +
+        '<div id="st-body"><button class="btn block" id="st-show">显示释义</button></div>';
+      document.getElementById("st-spell").onchange = function () { saveStore("cet4_spellmode", this.checked); spell = this.checked; showMeaning(); };
+      document.getElementById("st-show").onclick = showMeaning;
+      document.getElementById("st-card").onclick = showMeaning;
+      function showMeaning() {
+        var ex = exampleOf(w.w);
+        document.getElementById("st-body").innerHTML =
+          '<div class="card"><div style="font-size:18px;line-height:1.6">' + esc(w.m) + "</div>" +
+          (ex ? '<div class="muted" style="margin-top:8px">例：' + esc(ex) + "</div>" : "") +
+          (spell ? '<input type="text" id="st-in" placeholder="拼写该单词…" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:10px">' : "") +
+          '<div class="row" style="margin-top:12px"><button class="btn ghost" id="st-no" style="flex:1">不认识</button><button class="btn" id="st-yes" style="flex:1">认识</button></div></div>';
+        document.getElementById("st-no").onclick = function () { assess(false); };
+        document.getElementById("st-yes").onclick = function () {
+          if (spell && document.getElementById("st-in").value.trim().toLowerCase() !== w.w.toLowerCase()) { toast("拼写不正确"); return; }
+          assess(true);
+        };
+        if (spell) document.getElementById("st-in").focus();
+      }
+      function assess(known) {
+        var log = getVocabLog();
+        var d = todayKey(); log.days[d] = (log.days[d] || 0) + 1; log.total = (log.total || 0) + 1;
+        log.learned[w.w] = known ? "k" : "u"; saveVocabLog(log);
+        recordAnswer("vocab", known);
+        if (known) ok++; else { no++; review.push(w); }
+        idx++; draw();
+      }
+    }
+    draw();
+  }
+  function renderVocabBook(body) {
+    var cur = store("cet4_book", "cet4");
+    var nosimple = store("cet4_nosimple", false);
+    var books = [
+      { k: "cet4", t: "四级核心词汇", d: "全部 4537 词 · 推荐" },
+      { k: "f5", t: "四级 · 近5年真题高频", d: "近5年出现 ≥ 8 次" },
+      { k: "f10", t: "四级 · 近10年真题高频", d: "近10年出现 ≥ 15 次" },
+      { k: "基础", t: "四级 · 难度基础", d: "" },
+      { k: "中级", t: "四级 · 难度中级", d: "" },
+      { k: "较难", t: "四级 · 难度较难", d: "" },
+      { k: "高阶", t: "四级 · 难度高阶", d: "" },
+      { k: "cet6", t: "六级核心", d: "进阶词汇" },
+      { k: "ky", t: "考研核心", d: "" },
+      { k: "gk", t: "高中词汇", d: "" },
+      { k: "zk", t: "初中词汇（简单）", d: "" },
+      { k: "toefl", t: "托福核心", d: "" },
+      { k: "fav", t: "我的生词本", d: "收藏的单词" }
+    ];
+    body.innerHTML = '<label class="info" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vt-nosimple" ' + (nosimple ? "checked" : "") + ' style="width:18px;height:18px"> 一键去除简单词（小学/初中词汇，仅对四级词书生效）</label>' +
+      books.map(function (b) {
+        return '<div class="list-item" data-book="' + b.k + '"><div class="ic" style="background:#3949AB1f;color:#3949AB">' + esc(b.t.charAt(0)) + "</div>" +
+          "<div><h3>" + esc(b.t) + (b.k === cur ? " ✓" : "") + "</h3><p>" + bookWords(b.k).length + " 词" + (b.d ? " · " + b.d : "") + "</p></div>" +
+          '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+      }).join("");
+    document.getElementById("vt-nosimple").onchange = function () { saveStore("cet4_nosimple", this.checked); renderVocabBook(body); };
+    body.querySelectorAll("[data-book]").forEach(function (el) {
+      el.onclick = function () { saveStore("cet4_book", el.getAttribute("data-book")); toast("已选择词书，开始背吧"); document.getElementById("tab-study").click(); };
+    });
+  }
+  function renderVocabTest(body) {
+    var t = window.CET4_VTEST || { bands: [], words: [] };
+    var checked = {};
+    body.innerHTML = '<div class="page"><div class="section-title">单词量测试</div>' +
+      '<div class="info">勾选你"认识"的单词（认识＝看到能说出中文意思）。根据你认识的分布估算词汇量。</div>' +
+      t.words.map(function (w, i) {
+        return '<label class="card" style="display:flex;align-items:center;gap:10px;cursor:pointer"><input type="checkbox" data-i="' + i + '" style="width:18px;height:18px"><b style="font-size:17px;color:var(--primary)">' + esc(w.w) + "</b></label>";
+      }).join("") +
+      '<button class="btn block" id="vt-go" style="margin-top:12px">估算我的词汇量</button><div id="vt-res"></div></div>';
+    body.querySelectorAll("[data-i]").forEach(function (cb) { cb.onchange = function () { checked[cb.getAttribute("data-i")] = cb.checked; }; });
+    document.getElementById("vt-go").onclick = function () {
+      var bands = t.bands, total = 0, per = {};
+      t.words.forEach(function (w, i) { per[w.b] = per[w.b] || { k: 0, n: 0 }; per[w.b].n++; if (checked[i]) per[w.b].k++; });
+      for (var b = 0; b < bands.length; b++) { var pb = per[b] || { k: 0, n: 1 }; total += (pb.k / pb.n) * bands[b]; }
+      total = Math.round(total / 500) * 500;
+      var lv = total >= 8000 ? "优秀（可挑战六级/考研）" : total >= 5500 ? "良好（四级较稳）" : total >= 4000 ? "中等（四级需努力）" : "偏少（建议先猛攻词汇）";
+      document.getElementById("vt-res").innerHTML = '<div class="card" style="margin-top:12px;text-align:center"><div class="muted">你的估算词汇量</div><div style="font-size:40px;font-weight:800;color:var(--primary)">' + total + '</div><div>' + lv + "</div></div>";
+    };
+  }
+  function renderVocabRecords() {
+    var log = getVocabLog();
+    var days = log.days || {};
+    var keys = Object.keys(days).sort();
+    var html = '<div class="page"><div class="section-title">背单词记录</div><div class="stat-row">' +
+      '<div class="stat"><div class="n">' + (log.total || 0) + '</div><div class="l">累计背词</div></div>' +
+      '<div class="stat"><div class="n">' + Object.keys(log.learned || {}).length + '</div><div class="l">涉及词数</div></div>' +
+      '<div class="stat"><div class="n">' + keys.length + '</div><div class="l">打卡天数</div></div></div>' +
+      '<div class="card"><div class="section-title" style="margin-top:0">每日背词量（近 14 天）</div>';
+    if (!keys.length) html += '<div class="muted">还没有记录，去「背单词」开始吧。</div>';
+    keys.slice(-14).forEach(function (k) { html += '<div class="between" style="margin:4px 0"><span>' + esc(k) + '</span><b>' + days[k] + " 词</b></div>"; });
+    html += "</div></div>";
+    main.innerHTML = html;
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -1785,6 +1909,8 @@
     else if (name === "fav") renderFavList();
     else if (name === "qfav") renderQFav();
     else if (name === "roots") renderRootsList();
+    else if (name === "vtest") renderVocabTest(main);
+    else if (name === "vrecords") renderVocabRecords();
     else if (name === "eztor") renderEztorList();
     else if (name === "links") renderLinks();
     else if (name === "yati") renderYatiList();
