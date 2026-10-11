@@ -1,0 +1,22 @@
+name: selftest
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Serve site
+        run: python3 -m http.server 8000 --directory . >/dev/null 2>&1 &
+      - name: Run headless self-test
+        run: |
+          sleep 2
+          google-chrome --headless=new --disable-gpu --no-sandbox \
+            --virtual-time-budget=45000 --dump-dom "http://localhost:8000/selftest.html" > out.html 2>/dev/null || true
+          echo "----- result -----"
+          grep -o "SELFTEST [A-Z]* [0-9]*/[0-9]*" out.html | head -1
+          grep -q "SELFTEST PASS" out.html || { echo "SELFTEST FAILED"; grep -o "FAIL [^<]*" out.html | head -20; exit 1; }
+          echo "selftest passed"

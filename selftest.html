@@ -24,20 +24,22 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=8"></script>
-<script src="data/zhenti.js?v=8"></script>
-<script src="data/zaudio.js?v=8"></script>
-<script src="data/wordmeta.js?v=8"></script>
-<script src="data/roots.js?v=8"></script>
-<script src="data/eztor.js?v=8"></script>
-<script src="data/papers.js?v=8"></script>
-<script src="data/words_extra.js?v=8"></script>
-<script src="data/vocabtest.js?v=8"></script>
-<script src="data/wordcolloc.js?v=8"></script>
-<script src="data/voa.js?v=8"></script>
-<script src="data/dict.js?v=8"></script>
-<script src="data/grammar.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="data/data.js?v=9"></script>
+<script src="data/zhenti.js?v=9"></script>
+<script src="data/zaudio.js?v=9"></script>
+<script src="data/wordmeta.js?v=9"></script>
+<script src="data/roots.js?v=9"></script>
+<script src="data/eztor.js?v=9"></script>
+<script src="data/papers.js?v=9"></script>
+<script src="data/words_extra.js?v=9"></script>
+<script src="data/vocabtest.js?v=9"></script>
+<script src="data/wordcolloc.js?v=9"></script>
+<script src="data/voa.js?v=9"></script>
+<script src="data/dict.js?v=9"></script>
+<script src="data/grammar.js?v=9"></script>
+<script src="data/wordform.js?v=9"></script>
+<script src="data/waudio.js?v=9"></script>
+<script src="app.js?v=9"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -78,6 +80,8 @@
   q("#btn-home").click();
   ok("home renders 6 categories", qa("#main [data-cat]").length === 6, "got " + qa("#main [data-cat]").length);
   ok("offline dictionary loaded", !!window.CET4_DICT && Object.keys(window.CET4_DICT).length >= 8000, "entries=" + (window.CET4_DICT ? Object.keys(window.CET4_DICT).length : 0));
+  ok("word-form data loaded", !!window.CET4_WORDFORM && Object.keys(window.CET4_WORDFORM).length >= 5000, "entries=" + (window.CET4_WORDFORM ? Object.keys(window.CET4_WORDFORM).length : 0));
+  ok("word-audio map loaded", !!window.CET4_WAUDIO && Object.keys(window.CET4_WAUDIO).length >= 100, "entries=" + (window.CET4_WAUDIO ? Object.keys(window.CET4_WAUDIO).length : 0));
 
   var cats = ["words", "exam", "skill", "ai", "me", "more"];
   cats.forEach(function (c) {
@@ -147,6 +151,25 @@
       ok("grammar quiz present", !!opt);
       if (opt) { opt.click(); ok("grammar quiz explanation", !!q('#main .grammar-quiz .explain')); }
     } catch (e) { ok("grammar flow", false, String(e)); }
+    testListening();
+  }
+
+  function testListening() {
+    try {
+      q("#btn-home").click();
+      q('#main [data-cat="skill"]').click();
+      q('#main [data-go="listening"]').click();
+      var first = q('#main [data-idx="0"]');
+      ok("listening list has items", !!first);
+      first.click();
+      ok("listening has dictation inputs", qa('#main [data-din]').length > 0, "inputs=" + qa('#main [data-din]').length);
+      var inp = q('#main [data-din]');
+      if (inp) {
+        inp.value = "the test sentence";
+        var chk = q('#main [data-dchk]'); chk.click();
+        ok("dictation check renders result", !!q('#main [data-dres]') && q('#main [data-dres]').textContent.length > 0);
+      }
+    } catch (e) { ok("listening dictation flow", false, String(e)); }
     testAI();
   }
 

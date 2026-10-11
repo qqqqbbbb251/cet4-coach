@@ -552,7 +552,7 @@
           (v.example ? '<div class="muted" style="margin-top:6px">例：' + esc(v.example) + "</div>" : "") + "</div>";
       }).join("");
       box.querySelectorAll(".star").forEach(function (b) {
-        if (b.getAttribute("data-say")) b.onclick = function () { speak(b.getAttribute("data-say")); };
+        if (b.getAttribute("data-say")) b.onclick = function () { playWord(b.getAttribute("data-say")); };
         else b.onclick = function () { var on = toggleFav(b.getAttribute("data-fav"), b.getAttribute("data-m")); b.classList.toggle("on", on); toast(on ? "已收藏到生词本" : "已取消收藏"); };
       });
     }
@@ -618,6 +618,16 @@
           '<button class="btn ghost small" data-seg="' + i + '">▶</button><button class="btn ghost small" data-loop="' + i + '">🔁</button></div>';
       });
       html += "</div>";
+      html += '<div class="section-title">听写练习（听一句，写一句）</div><div class="card">' +
+        '<div class="muted" style="margin-bottom:6px">点 ▶ 播放该句，输入你听到的英文，点「核对」比对原文。</div>';
+      segs.forEach(function (seg, i) {
+        html += '<div style="padding:8px 0;border-bottom:1px solid var(--line)">' +
+          '<div class="row" style="gap:8px"><button class="btn ghost small" data-dplay="' + i + '">▶</button>' +
+          '<input type="text" data-din="' + i + '" placeholder="听写…" style="flex:1" autocomplete="off" autocapitalize="off" spellcheck="false">' +
+          '<button class="btn ghost small" data-dchk="' + i + '">核对</button></div>' +
+          '<div data-dres="' + i + '" style="margin-top:6px"></div></div>';
+      });
+      html += "</div>";
     }
     html += '<div class="section-title">听力题目</div>' + sectionCard(s.questions) + "</div>";
     main.innerHTML = html;
@@ -635,6 +645,16 @@
       });
       main.querySelectorAll("[data-seg]").forEach(function (b) { b.onclick = function () { var g = segs[parseInt(b.getAttribute("data-seg"), 10)]; segMode = { start: g.start, end: g.end, loop: false }; au.currentTime = g.start; au.play(); }; });
       main.querySelectorAll("[data-loop]").forEach(function (b) { b.onclick = function () { var g = segs[parseInt(b.getAttribute("data-loop"), 10)]; segMode = { start: g.start, end: g.end, loop: true }; au.currentTime = g.start; au.play(); }; });
+      main.querySelectorAll("[data-dplay]").forEach(function (b) { b.onclick = function () { var g = segs[parseInt(b.getAttribute("data-dplay"), 10)]; segMode = { start: g.start, end: g.end, loop: false }; au.currentTime = g.start; au.play(); }; });
+      main.querySelectorAll("[data-dchk]").forEach(function (b) {
+        b.onclick = function () {
+          var i = parseInt(b.getAttribute("data-dchk"), 10), seg = segs[i];
+          var inp = main.querySelector('[data-din="' + i + '"]'), box = main.querySelector('[data-dres="' + i + '"]');
+          var ok = normWords(inp.value).join(" ") === normWords(seg.text).join(" ");
+          box.innerHTML = '<div style="font-weight:600;color:' + (ok ? "var(--green)" : "#c62828") + '">' + (ok ? "✓ 完全正确" : "✗ 有出入") + "</div>" +
+            '<div class="muted" style="margin-top:2px">原文：' + esc(seg.text) + "</div>" + compareWords(seg.text, inp.value);
+        };
+      });
     }
     bindSection(main.querySelector(".section-card"));
   }
@@ -1866,8 +1886,8 @@
         }
         main.innerHTML = '<div class="page"><div id="backslot"></div>' + head + b + '<div class="center" style="margin-top:12px"><button class="btn ghost small" id="vt-quit">结束测试</button></div></div>';
         document.getElementById("backslot").appendChild(backBar("返回", home));
-        var say = document.getElementById("vt-say"); if (say) say.onclick = function () { speak(x.w); };
-        if (it.type === "listening") speak(x.w);
+        var say = document.getElementById("vt-say"); if (say) say.onclick = function () { playWord(x.w); };
+        if (it.type === "listening") playWord(x.w);
         var dk = document.getElementById("vt-dk");
         if (dk) dk.onclick = function () { answers[i] = it.type === "spell" ? "" : -1; advance(); };
         if (it.type === "spell") {
@@ -1976,6 +1996,19 @@
 
   /* ---------- 背单词（百词斩式：成组·递推·不即时判） ---------- */
   function speak(t) { try { var u = new SpeechSynthesisUtterance(t); u.lang = "en-US"; u.rate = 0.9; window.speechSynthesis.speak(u); } catch (e) { } }
+  function wfo(w) { return (window.CET4_WORDFORM || {})[String(w).toLowerCase()] || {}; }
+  function playWord(word) { var w = String(word == null ? "" : word).toLowerCase(); var rel = (window.CET4_WAUDIO || {})[w]; if (rel) { try { var a = new Audio(rel); a.play().catch(function () { speak(word); }); return; } catch (e) { } } speak(word); }
+  function normWords(t) { return String(t || "").toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).filter(Boolean); }
+  function compareWords(correct, user) {
+    var cw = normWords(correct), uw = normWords(user), bag = {}, hit = 0;
+    uw.forEach(function (w) { bag[w] = (bag[w] || 0) + 1; });
+    var disp = cw.map(function (w) {
+      if (bag[w] > 0) { bag[w]--; hit++; return '<span style="color:#2e7d32">' + esc(w) + '</span>'; }
+      return '<span style="color:#c62828;border-bottom:1px dashed #c62828">' + esc(w) + '</span>';
+    }).join(" ");
+    var acc = cw.length ? Math.round(hit / cw.length * 100) : 0;
+    return '<div style="margin-top:4px;line-height:1.9;font-size:15px">' + disp + '</div><div class="muted">词准率 ' + acc + '%（绿=写对，红=漏写/写错）</div>';
+  }
   function distractors(excl, field, n, all) {
     var pool = all.filter(function (w) { return w.w !== excl.w; }), picked = [], used = {}, guard = 0;
     while (picked.length < n && guard++ < 400) { var x = pool[Math.floor(Math.random() * pool.length)]; if (!x) break; var k = field === "m" ? x.m : x.w; if (used[k]) continue; used[k] = 1; picked.push(x[field]); }
@@ -2000,16 +2033,18 @@
       var words = groups[g], h = head + '<div class="between"><span class="muted">背新词 · 第' + (g + 1) + ' 组</span></div>' +
         '<div class="info">先记住这 ' + words.length + " 个词（含发音、固定搭配），随后以英译汉/汉译英等形式考察。</div>";
       words.forEach(function (w, i) {
-        var ex = exampleOf(w.w); var coll = collocOf(w.w);
+        var ex = exampleOf(w.w); var coll = collocOf(w.w); var inf = wfo(w.w);
         h += '<div class="card"><div class="between"><b style="font-size:20px;color:var(--primary)">' + esc(w.w) + '</b><span class="muted">' + (w.p ? "/" + esc(w.p) + "/" : "") + ' <button class="star" data-say="' + i + '">🔊</button></span></div>' +
           '<div style="margin-top:6px;font-size:16px">' + esc(w.m) + "</div>" +
+          (inf.f ? '<div class="muted" style="margin-top:4px">词形：' + esc(inf.f) + "</div>" : "") +
+          (inf.d ? '<div class="muted" style="margin-top:2px">英文释义：' + esc(inf.d) + "</div>" : "") +
           (coll.length ? '<div class="muted" style="margin-top:6px">搭配：' + coll.map(esc).join("；") + "</div>" : "") +
           (ex ? '<div class="muted" style="margin-top:4px">例：' + esc(ex) + "</div>" : "") +
           '<button class="btn ghost small" data-dic="' + i + '" style="margin-top:6px">查词典</button><div id="dicbox-' + i + '"></div></div>';
       });
       h += '<button class="btn block" id="learn-next">记住了，开始测验</button>';
       body.innerHTML = h;
-      body.querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { speak(words[parseInt(b.getAttribute("data-say"), 10)].w); }; });
+      body.querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { playWord(words[parseInt(b.getAttribute("data-say"), 10)].w); }; });
       body.querySelectorAll("[data-dic]").forEach(function (b) { b.onclick = function () { var i = parseInt(b.getAttribute("data-dic"), 10); lookupWord(words[i].w, document.getElementById("dicbox-" + i)); }; });
       document.getElementById("learn-next").onclick = function () { si++; step(); };
     }
@@ -2427,11 +2462,15 @@
     var w = String(word).toLowerCase();
     function render(d) {
       var id = w.replace(/[^a-z]/g, "");
+      var inf = wfo(w);
       container.innerHTML = '<div class="info" style="margin-top:8px"><b>' + esc(word) + "</b> " + (d.ph ? esc(d.ph) : "") +
         ' <button class="btn ghost small" id="dic-play-' + id + '">🔊</button>' +
-        '<div style="margin-top:6px">' + esc(d.def || "") + "</div>" + (d.ex ? '<div class="muted" style="margin-top:4px">例：' + esc(d.ex) + "</div>" : "") + "</div>";
+        '<div style="margin-top:6px">' + esc(d.def || "") + "</div>" +
+        (inf.f ? '<div class="muted" style="margin-top:4px">词形：' + esc(inf.f) + "</div>" : "") +
+        (inf.d ? '<div class="muted" style="margin-top:2px">英文释义：' + esc(inf.d) + "</div>" : "") +
+        (d.ex ? '<div class="muted" style="margin-top:4px">例：' + esc(d.ex) + "</div>" : "") + "</div>";
       var pb = document.getElementById("dic-play-" + id);
-      if (pb) pb.onclick = function () { if (d.audio) { try { new Audio(d.audio).play(); return; } catch (e) { } } speak(word); };
+      if (pb) pb.onclick = function () { if (d.audio) { try { new Audio(d.audio).play(); return; } catch (e) { } } playWord(word); };
     }
     var cache = store("cet4_dict", {});
     if (cache[w]) { render(cache[w]); return; }
