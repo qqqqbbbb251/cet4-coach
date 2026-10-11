@@ -752,7 +752,7 @@
       btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("wr-result"); res.innerHTML = "";
       gradeEssay(s.prompt, ta.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><button class="btn block" id="aiCompose" style="margin-top:10px">把本次批改 + 客观题 记为一次考试</button>'; saveRecord("essay", s.prompt, ta.value.trim(), md); toast("已保存到作文记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -792,7 +792,7 @@
       var btn = this, old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
       var res = document.getElementById("tr-result"); res.innerHTML = "";
       gradeTranslation(s.prompt, s.reference, input.value.trim())
-        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + "</div>"; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); })
+        .then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:16px">' + mdToHtml(md) + '</div><button class="btn block" id="aiCompose" style="margin-top:10px">把本次批改 + 客观题 记为一次考试</button>'; saveRecord("translation", s.prompt, input.value.trim(), md); toast("已保存到翻译记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; })
         .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:16px">批改失败：' + esc(e.message) + "</div>"; })
         .then(function () { btn.disabled = false; btn.textContent = old; });
     };
@@ -1115,7 +1115,10 @@
     if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
     var old = btn.textContent; btn.disabled = true; btn.innerHTML = '<span class="spin"></span> 批改中…';
     res.innerHTML = "";
-    fn().then(function (md) { res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>"; if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); } })
+    fn().then(function (md) {
+      res.innerHTML = '<div class="ai-result" style="margin-top:12px">' + mdToHtml(md) + "</div>" + (kind ? '<button class="btn block" id="aiCompose" style="margin-top:10px">把本次批改 + 客观题 记为一次考试</button>' : "");
+      if (kind) { saveRecord(kind, title, input, md); toast("已保存到" + (kind === "essay" ? "作文" : "翻译") + "记录"); var cb = document.getElementById("aiCompose"); if (cb) cb.onclick = composeFirstExam; }
+    })
       .catch(function (e) { res.innerHTML = '<div class="info warn" style="margin-top:12px">失败：' + esc(e.message) + "</div>"; })
       .then(function () { btn.disabled = false; btn.textContent = old; });
   }
