@@ -24,19 +24,20 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=7"></script>
-<script src="data/zhenti.js?v=7"></script>
-<script src="data/zaudio.js?v=7"></script>
-<script src="data/wordmeta.js?v=7"></script>
-<script src="data/roots.js?v=7"></script>
-<script src="data/eztor.js?v=7"></script>
-<script src="data/papers.js?v=7"></script>
-<script src="data/words_extra.js?v=7"></script>
-<script src="data/vocabtest.js?v=7"></script>
-<script src="data/wordcolloc.js?v=7"></script>
-<script src="data/voa.js?v=7"></script>
-<script src="data/dict.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="data/data.js?v=8"></script>
+<script src="data/zhenti.js?v=8"></script>
+<script src="data/zaudio.js?v=8"></script>
+<script src="data/wordmeta.js?v=8"></script>
+<script src="data/roots.js?v=8"></script>
+<script src="data/eztor.js?v=8"></script>
+<script src="data/papers.js?v=8"></script>
+<script src="data/words_extra.js?v=8"></script>
+<script src="data/vocabtest.js?v=8"></script>
+<script src="data/wordcolloc.js?v=8"></script>
+<script src="data/voa.js?v=8"></script>
+<script src="data/dict.js?v=8"></script>
+<script src="data/grammar.js?v=8"></script>
+<script src="app.js?v=8"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -116,12 +117,13 @@
       q('#main [data-go="vtest"]').click();
       ok("vocab-test intro renders", !!q("#vt-start"));
       q("#vt-start").click();
+      ok("vocab-test has 不认识 option", !!q("#vt-dk"));
       var guard = 0;
       var timer = setInterval(function () {
         if (q("#vt-again")) {
           clearInterval(timer);
           ok("vocab-test results render", /阅读词汇/.test(document.getElementById("main").textContent));
-          testAI();
+          testGrammar();
           return;
         }
         if (++guard > 400) { clearInterval(timer); ok("vocab-test completes", false, "timeout"); testAI(); return; }
@@ -131,6 +133,21 @@
         if (inp) { inp.value = ""; var nb = q("#vt-next"); if (nb) nb.click(); }
       }, 200);
     } catch (e) { ok("vocab-test flow", false, String(e)); testAI(); }
+  }
+
+  function testGrammar() {
+    try {
+      q("#btn-home").click();
+      q('#main [data-cat="skill"]').click();
+      q('#main [data-go="grammar"]').click();
+      ok("grammar list renders", qa('#main [data-gid]').length >= 30, "topics=" + qa('#main [data-gid]').length);
+      q('#main [data-gid]').click();
+      ok("grammar detail has examples", qa('#main .card').length > 3, "cards=" + qa('#main .card').length);
+      var opt = q('#main .grammar-quiz .opt');
+      ok("grammar quiz present", !!opt);
+      if (opt) { opt.click(); ok("grammar quiz explanation", !!q('#main .grammar-quiz .explain')); }
+    } catch (e) { ok("grammar flow", false, String(e)); }
+    testAI();
   }
 
   function testAI() {

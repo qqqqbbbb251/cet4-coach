@@ -343,7 +343,7 @@
     writinglib: { t: "写作素材库", d: "高分句型 · 万能表达 · 我的好句", ic: "素", c: "#7B1FA2" },
     errbook: { t: "错词本", d: "批改提取的错词/错搭配 · 记忆曲线复习", ic: "错", c: "#C62828" },
     collocbook: { t: "搭配本", d: "写作高频搭配 + 你的错搭配", ic: "搭", c: "#00695C" },
-    grammar: { t: "语法要点", d: "15 个核心语法专题", ic: "法", c: "#2E7D32" },
+    grammar: { t: "语法教程", d: "33 个专题 · 讲解 + 例句 + 易错 + 小测", ic: "法", c: "#2E7D32" },
     collocations: { t: "常用短语", d: "126 个高频搭配", ic: "搭", c: "#00838F" },
     ocr: { t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 建议", ic: "拍", c: "#D81B60" },
     plan: { t: "学习计划", d: "分阶段计划 · 每日打卡 · AI 调整", ic: "计", c: "#C62828" },
@@ -728,20 +728,93 @@
   }
 
   /* ---------- grammar ---------- */
+  function grammarData() { return (window.CET4_GRAMMAR && window.CET4_GRAMMAR.length) ? window.CET4_GRAMMAR : (DATA.grammar || []); }
   function renderGrammarList() {
-    listPage("语法要点（" + DATA.grammar.length + " 个专题）", DATA.grammar, function (s, i) {
-      return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#2E7D321f;color:#2E7D32">法</div>' +
-        '<div><h3>' + esc(s.title) + "</h3><p>" + esc((s.summary || "").slice(0, 40)) + "…</p></div>" +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
-    }, renderGrammarDetail);
+    var g = grammarData();
+    var cats = []; g.forEach(function (t) { var c = t.cat || "语法"; if (cats.indexOf(c) < 0) cats.push(c); });
+    main.innerHTML = '<div class="page"><div class="section-title">语法教程（' + g.length + " 个专题）</div>" +
+      '<input type="text" id="gr-search" placeholder="搜索语法点，如 从句 / 时态 / 虚拟 / 非谓语…"><div id="gr-list"></div></div>';
+    var box = document.getElementById("gr-list");
+    function draw(q) {
+      q = (q || "").trim().toLowerCase();
+      var items = q ? g.filter(function (t) { return (t.title + (t.summary || "") + (t.cat || "")).toLowerCase().indexOf(q) >= 0; }) : g;
+      var h = "";
+      cats.forEach(function (c) {
+        var sub = items.filter(function (t) { return (t.cat || "语法") === c; });
+        if (!sub.length) return;
+        h += '<div class="section-title">' + esc(c) + "</div>";
+        sub.forEach(function (t) {
+          h += '<div class="list-item" data-gid="' + esc(t.id) + '"><div class="ic" style="background:#2E7D321f;color:#2E7D32">法</div>' +
+            '<div><h3>' + esc(t.title) + '</h3><p>' + esc((t.summary || "").slice(0, 46)) + "…</p></div>" +
+            '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+        });
+      });
+      box.innerHTML = h || '<div class="info">没有匹配的语法点。</div>';
+      box.querySelectorAll("[data-gid]").forEach(function (el) {
+        el.onclick = function () { var id = el.getAttribute("data-gid"); var t = g.filter(function (x) { return x.id === id; })[0]; if (t) renderGrammarDetail(t); };
+      });
+    }
+    document.getElementById("gr-search").oninput = function () { draw(this.value); };
+    draw("");
   }
-  function renderGrammarDetail(s) {
-    var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(s.title) + "</div>" +
-      '<div class="card"><div class="passage">' + esc(s.summary) + "</div>" +
-      '<div class="stem" style="font-weight:600;margin:6px 0 8px">复习清单</div><ul style="padding-left:20px;line-height:1.9">' +
-      (s.checklist || []).map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul></div></div>";
+  function renderGrammarDetail(t) {
+    var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(t.title) + "</div>" +
+      '<div class="card"><div class="passage">' + esc(t.summary || "") + "</div></div>";
+    if (t.sections && t.sections.length) {
+      t.sections.forEach(function (sec) {
+        html += '<div class="section-title">' + esc(sec.h) + "</div>";
+        if (sec.body || (sec.bullets && sec.bullets.length)) {
+          html += '<div class="card"><div style="line-height:1.75">' + esc(sec.body || "") + "</div>" +
+            (sec.bullets && sec.bullets.length ? '<ul style="padding-left:20px;line-height:1.9;margin-top:8px">' + sec.bullets.map(function (b) { return "<li>" + esc(b) + "</li>"; }).join("") + "</ul>" : "") + "</div>";
+        }
+        (sec.examples || []).forEach(function (ex) {
+          var spk = String(ex.en || "").replace(/\s*→.*$/, "");
+          html += '<div class="card" style="border-left:3px solid #2E7D32"><div style="font-size:15px;line-height:1.6"><b>' + esc(ex.en || "") + "</b>" +
+            (spk ? ' <button class="star" data-say="' + esc(spk) + '">🔊</button>' : "") + "</div>" +
+            (ex.zh ? '<div class="muted" style="margin-top:4px">' + esc(ex.zh) + "</div>" : "") +
+            (ex.note ? '<div class="muted" style="margin-top:4px">💡 ' + esc(ex.note) + "</div>" : "") + "</div>";
+        });
+      });
+    } else {
+      html += '<div class="card"><div class="stem" style="font-weight:600;margin:6px 0 8px">复习清单</div><ul style="padding-left:20px;line-height:1.9">' +
+        (t.checklist || []).map(function (c) { return "<li>" + esc(c) + "</li>"; }).join("") + "</ul></div>";
+    }
+    if (t.mistakes && t.mistakes.length) {
+      html += '<div class="section-title">易错提示</div><div class="card">';
+      t.mistakes.forEach(function (m) {
+        html += '<div style="margin:6px 0;line-height:1.6"><span style="color:#c62828">✗ ' + esc(m.wrong) + '</span><br>' +
+          '<span style="color:#2e7d32">✓ ' + esc(m.right) + "</span>" + (m.why ? '<div class="muted" style="margin-top:2px">' + esc(m.why) + "</div>" : "") + "</div>";
+      });
+      html += "</div>";
+    }
+    if (t.quiz && t.quiz.length) {
+      html += '<div class="section-title">随堂小测</div>';
+      t.quiz.forEach(function (qz, qi) {
+        html += '<div class="card grammar-quiz" data-qi="' + qi + '"><div class="stem">' + esc(qz.q) + "</div>";
+        (qz.options || []).forEach(function (o, oi) { html += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + ".</span><span>" + esc(o) + "</span></div>"; });
+        html += "</div>";
+      });
+    }
+    html += "</div>";
     main.innerHTML = html;
     document.getElementById("backslot").appendChild(backBar("返回", renderGrammarList));
+    main.querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { speak(b.getAttribute("data-say")); }; });
+    var done = {};
+    main.querySelectorAll(".grammar-quiz").forEach(function (card, qi) {
+      var qz = t.quiz[qi];
+      card.querySelectorAll(".opt").forEach(function (el) {
+        el.onclick = function () {
+          if (done[qi]) return; done[qi] = true;
+          card.querySelectorAll(".opt").forEach(function (o) {
+            o.classList.add("locked");
+            var oi = parseInt(o.getAttribute("data-oi"), 10);
+            if (oi === qz.answer) o.classList.add("correct"); else if (o === el) o.classList.add("wrong");
+          });
+          var d = document.createElement("div"); d.className = "explain"; d.textContent = "解析：" + (qz.explain || "");
+          card.appendChild(d);
+        };
+      });
+    });
   }
 
   /* ---------- collocations ---------- */
@@ -1738,7 +1811,7 @@
         '· <b>阅读词汇</b>＝英译汉（看单词选中文）<br>' +
         '· <b>听力词汇</b>＝听音辨义（听发音选中文）<br>' +
         '· <b>写作词汇</b>＝汉译英＋拼写（据中文写英文）<br>' +
-        '各频段掌握率 × 该段词数求和即得估算值（选择题已做猜对校正）。</div>' +
+        '各频段掌握率 × 该段词数求和即得估算值。<br>不认识的词请直接点<b>「不认识」</b>：系统会用「不认识」推断你的猜对比例并予以扣除，避免偏高。</div>' +
         '<div class="card"><div class="section-title" style="margin-top:0">抽样频段（共约 ' + TOTAL_WORDS + ' 词）</div>' +
         bands.map(function (b, i) { return '<div class="between" style="margin:4px 0"><span>第 ' + (i + 1) + ' 段</span><span class="muted">' + b.lo + "–" + b.hi + " 词 · 约 " + b.size + " 个</span></div>"; }).join("") +
         "</div>" +
@@ -1767,6 +1840,8 @@
         it.opts.forEach(function (o, oi) { h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + ".</span><span>" + esc(o) + "</span></div>"; });
         return h;
       }
+      function dkBtn() { return '<button class="btn ghost block" id="vt-dk" style="margin-top:8px">不认识</button>'; }
+      function advance() { i++; draw(); }
       function draw() {
         if (i >= items.length) { results(mode, items, answers, false); return; }
         var it = items[i], x = it.x;
@@ -1775,27 +1850,29 @@
         if (it.type === "reading") {
           b = '<div class="card" style="text-align:center"><div class="muted">这个单词的中文意思是？</div>' +
             '<div style="font-size:34px;font-weight:800;color:var(--primary);margin:8px 0">' + esc(x.w) + "</div>" +
-            '<div class="muted">' + (x.p ? "/" + esc(x.p) + "/ " : "") + '<button class="star" id="vt-say">🔊</button></div></div>' + optList(it);
+            '<div class="muted">' + (x.p ? "/" + esc(x.p) + "/ " : "") + '<button class="star" id="vt-say">🔊</button></div></div>' + optList(it) + dkBtn();
         } else if (it.type === "listening") {
           b = '<div class="card" style="text-align:center"><div class="muted">听发音，选出正确的中文含义</div>' +
-            '<div style="margin:12px 0"><button class="btn" id="vt-say">🔊 播放 / 重听</button></div></div>' + optList(it);
+            '<div style="margin:12px 0"><button class="btn" id="vt-say">🔊 播放 / 重听</button></div></div>' + optList(it) + dkBtn();
         } else if (it.type === "c2e") {
           b = '<div class="card" style="text-align:center"><div class="muted">下列中文含义对应的单词是？</div>' +
-            '<div style="font-size:19px;line-height:1.6;margin:10px 0">' + esc(x.m) + '</div><button class="star" id="vt-say">🔊</button></div>' + optList(it);
+            '<div style="font-size:19px;line-height:1.6;margin:10px 0">' + esc(x.m) + '</div><button class="star" id="vt-say">🔊</button></div>' + optList(it) + dkBtn();
         } else {
           b = '<div class="card" style="text-align:center"><div class="muted">根据中文含义拼写单词</div>' +
             '<div style="font-size:20px;line-height:1.6;margin:10px 0">' + esc(x.m) + "</div>" +
             '<div class="muted">提示 <b>' + esc(x.w.charAt(0)) + " " + dashes(Math.max(0, x.w.length - 1)) + "</b>（" + x.w.length + ' 个字母） <button class="star" id="vt-say">🔊</button></div>' +
             '<input type="text" id="vt-in" placeholder="输入英文单词…" autocomplete="off" autocapitalize="off" spellcheck="false" style="margin-top:12px"></div>' +
-            '<button class="btn block" id="vt-next" style="margin-top:10px">下一题</button>';
+            '<button class="btn block" id="vt-next" style="margin-top:10px">下一题</button>' + dkBtn();
         }
         main.innerHTML = '<div class="page"><div id="backslot"></div>' + head + b + '<div class="center" style="margin-top:12px"><button class="btn ghost small" id="vt-quit">结束测试</button></div></div>';
         document.getElementById("backslot").appendChild(backBar("返回", home));
         var say = document.getElementById("vt-say"); if (say) say.onclick = function () { speak(x.w); };
         if (it.type === "listening") speak(x.w);
+        var dk = document.getElementById("vt-dk");
+        if (dk) dk.onclick = function () { answers[i] = it.type === "spell" ? "" : -1; advance(); };
         if (it.type === "spell") {
           var inp = document.getElementById("vt-in"); inp.focus();
-          function submit() { answers[i] = inp.value.trim(); i++; draw(); }
+          function submit() { answers[i] = inp.value.trim(); advance(); }
           document.getElementById("vt-next").onclick = submit;
           inp.onkeydown = function (e) { if (e.key === "Enter") submit(); };
         } else {
@@ -1805,7 +1882,7 @@
               opts.forEach(function (o) { o.classList.remove("sel"); });
               el.classList.add("sel");
               answers[i] = parseInt(el.getAttribute("data-oi"), 10);
-              setTimeout(function () { i++; draw(); }, 170);
+              setTimeout(advance, 170);
             };
           });
         }
@@ -1816,40 +1893,57 @@
 
     function results(mode, items, answers, aborted) {
       var stat = {};
-      function acc(skill, b) { stat[skill] = stat[skill] || {}; stat[skill][b] = stat[skill][b] || { n: 0, k: 0 }; return stat[skill][b]; }
+      function cell(skill, b) { stat[skill] = stat[skill] || {}; stat[skill][b] = stat[skill][b] || { n: 0, c: 0, w: 0, dk: 0 }; return stat[skill][b]; }
       items.forEach(function (it, idx) {
         var a = answers[idx], s;
         if (it.type === "spell") {
           var v = String(a == null ? "" : a).trim().toLowerCase(), credit = 0;
           if (v) credit = v === it.x.w ? 1 : (lev(v, it.x.w) === 1 ? 0.5 : 0);
-          s = acc("writing_spell", it.x.b); s.n++; s.k += credit;
+          s = cell("writing_spell", it.x.b); s.n++; s.c += credit; if (!v) s.dk++;
         } else {
           var skill = it.type === "reading" ? "reading" : it.type === "listening" ? "listening" : "writing_c2e";
-          s = acc(skill, it.x.b); s.n++; if (a != null && a === it.ansIdx) s.k++;
+          s = cell(skill, it.x.b); s.n++;
+          if (a == null || a === -1) s.dk++;
+          else if (a === it.ansIdx) s.c++;
+          else s.w++;
         }
       });
-      function corrected(k, n, g) { if (!n) return 0; var p = k / n; return Math.max(0, Math.min(1, (p - g) / (1 - g))); }
-      function est(parts) {
+      /* 掌握率：识别题用「不认识」剔除瞎猜——先由「选错/不认识」比估计瞎猜比例 q，再扣掉猜对 */
+      function knowChoice(s) {
+        if (!s || !s.n) return { p: 0, v: 0 };
+        var n = s.n, c = s.c / n, w = s.w / n, dk = s.dk / n;
+        var q = (w === 0) ? 0 : (dk > 0 ? (w / dk) / (0.75 + w / dk) : 1);
+        var p = (c - q / 4) / (1 - q / 4);
+        p = Math.max(0, Math.min(1, p));
+        return { p: p, v: p * (1 - p) / n };
+      }
+      function knowSpell(s) {
+        if (!s || !s.n) return { p: 0, v: 0 };
+        var p = Math.max(0, Math.min(1, s.c / s.n));
+        return { p: p, v: p * (1 - p) / s.n };
+      }
+      function combine(parts) {
         var total = 0, va = 0;
         for (var b = 0; b < bands.length; b++) {
           var p = 0, wsum = 0, vv = 0;
           parts.forEach(function (sp) {
             var s = (stat[sp.skill] || {})[b];
             if (!s || !s.n) return;
-            var pp = corrected(s.k, s.n, sp.guess);
-            p += pp * sp.weight; wsum += sp.weight;
-            vv += (sp.weight * sp.weight) * (pp * (1 - pp) / s.n) / ((1 - sp.guess) * (1 - sp.guess));
+            var r = sp.prod ? knowSpell(s) : knowChoice(s);
+            p += r.p * sp.weight; wsum += sp.weight; vv += sp.weight * sp.weight * r.v;
           });
           if (wsum > 0) p = p / wsum;
           total += p * bands[b].size; va += vv * bands[b].size * bands[b].size;
         }
-        return { n: Math.round(total / 100) * 100, m: Math.round(1.96 * Math.sqrt(va) / 100) * 100 };
+        return { n: Math.round(total), m: Math.round(1.96 * Math.sqrt(va)) };
       }
-      var read = est([{ skill: "reading", weight: 1, guess: 0.25 }]);
-      var listen = est([{ skill: "listening", weight: 1, guess: 0.25 }]);
-      var write = est([{ skill: "writing_c2e", weight: 0.5, guess: 0.25 }, { skill: "writing_spell", weight: 0.5, guess: 0 }]);
+      var read = combine([{ skill: "reading", weight: 1 }]);
+      var listen = combine([{ skill: "listening", weight: 1 }]);
+      var write = combine([{ skill: "writing_c2e", weight: 0.5 }, { skill: "writing_spell", weight: 0.5, prod: true }]);
       var hasRead = mode === "reading" || mode === "all", hasListen = mode === "listening" || mode === "all", hasWrite = mode === "writing" || mode === "all";
-      function pctOf(skill, b) { var s = (stat[skill] || {})[b]; if (!s || !s.n) return "—"; return Math.round(s.k / s.n * 100) + "%"; }
+      function masteryPct(skill, b) { var s = (stat[skill] || {})[b]; if (!s || !s.n) return "—"; var r = (skill === "writing_spell") ? knowSpell(s) : knowChoice(s); return Math.round(r.p * 100) + "%"; }
+      var dkAgg = { n: 0, dk: 0 };
+      ["reading", "listening", "writing_c2e"].forEach(function (k) { for (var b = 0; b < bands.length; b++) { var s = (stat[k] || {})[b]; if (s && s.n) { dkAgg.n += s.n; dkAgg.dk += s.dk; } } });
       if (!aborted) {
         var h = store("cet4_vt_history", []);
         h.push({ date: todayKey(), mode: mode, read: hasRead ? read.n : null, listen: hasListen ? listen.n : null, write: hasWrite ? write.n : null });
@@ -1857,16 +1951,17 @@
       }
       var html = '<div class="page"><div class="section-title">测试结果</div><div class="card"><div class="stat-row">' +
         (hasRead ? statBox(read.n, "阅读词汇") : "") + (hasListen ? statBox(listen.n, "听力词汇") : "") + (hasWrite ? statBox(write.n, "写作词汇") : "") +
-        '</div><div class="muted" style="margin-top:8px">误差约 ±' + Math.max(read.m, listen.m, write.m) + " 词（95% 置信）。" + (aborted ? "（提前结束，未答项计为不会）" : "") + "</div></div>";
+        '</div><div class="muted" style="margin-top:8px">误差约 ±' + Math.max(read.m, listen.m, write.m) + " 词（95% 置信）。" +
+        (dkAgg.n ? "本次选「不认识」占 " + Math.round(dkAgg.dk / dkAgg.n * 100) + "%。" : "") + (aborted ? "（提前结束，未答项按不认识计）" : "") + "</div></div>";
       if (hasRead) html += '<div class="info">阅读词汇 ≈ <b>' + read.n + "</b>（±" + read.m + "）：" + vtLabel("reading", read.n) + "</div>";
       if (hasListen) html += '<div class="info">听力词汇 ≈ <b>' + listen.n + "</b>（±" + listen.m + "）：" + vtLabel("listening", listen.n) + "（基于浏览器语音合成，设备无英文语音时会偏低）</div>";
       if (hasWrite) html += '<div class="info">写作词汇 ≈ <b>' + write.n + "</b>（±" + write.m + "）：" + vtLabel("writing", write.n) + "</div>";
       html += '<div class="card"><div class="section-title" style="margin-top:0">各频段掌握率</div>' +
         '<div class="between muted" style="font-size:12px"><span>频段</span><span>' + (hasRead ? "阅读　" : "") + (hasListen ? "听力　" : "") + (hasWrite ? "汉译/拼写" : "") + "</span></div>";
       for (var bi2 = 0; bi2 < bands.length; bi2++) {
-        var wcell = hasWrite ? (pctOf("writing_c2e", bi2) + "/" + pctOf("writing_spell", bi2)) : "";
+        var wcell = hasWrite ? (masteryPct("writing_c2e", bi2) + "/" + masteryPct("writing_spell", bi2)) : "";
         html += '<div class="between" style="margin:4px 0"><span>' + bands[bi2].lo + "–" + bands[bi2].hi + '</span><span class="muted">' +
-          (hasRead ? pctOf("reading", bi2) + "　" : "") + (hasListen ? pctOf("listening", bi2) + "　" : "") + wcell + "</span></div>";
+          (hasRead ? masteryPct("reading", bi2) + "　" : "") + (hasListen ? masteryPct("listening", bi2) + "　" : "") + wcell + "</span></div>";
       }
       html += "</div>" +
         '<button class="btn block" id="vt-again" style="margin-top:12px">用同样方式重测</button>' +
