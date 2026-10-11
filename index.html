@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#3949AB">
 <title>四级备考 · CET-4 Coach</title>
 <link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <header id="appbar">
@@ -24,19 +24,20 @@
 <script>
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {
-      navigator.serviceWorker.register('./sw.js').catch(function () { });
+      navigator.serviceWorker.register('./sw.js').then(function(r){try{r.update();}catch(e){}}).catch(function () { });
     });
   }
 </script>
-<script src="data/data.js"></script>
-<script src="data/zhenti.js"></script>
-<script src="data/zaudio.js"></script>
-<script src="data/wordmeta.js"></script>
-<script src="data/roots.js"></script>
-<script src="data/eztor.js"></script>
-<script src="data/papers.js"></script>
-<script src="data/words_extra.js"></script>
-<script src="data/vocabtest.js"></script>
-<script src="app.js"></script>
+<script src="data/data.js?v=5"></script>
+<script src="data/zhenti.js?v=5"></script>
+<script src="data/zaudio.js?v=5"></script>
+<script src="data/wordmeta.js?v=5"></script>
+<script src="data/roots.js?v=5"></script>
+<script src="data/eztor.js?v=5"></script>
+<script src="data/papers.js?v=5"></script>
+<script src="data/words_extra.js?v=5"></script>
+<script src="data/vocabtest.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>
+
