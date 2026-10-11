@@ -64,7 +64,7 @@
     p.types[type] = p.types[type] || { a: 0, c: 0 }; p.types[type].a++; if (correct) p.types[type].c++;
     saveStore("cet4_progress", p);
   }
-  function addWrong(q) { var w = store("cet4_wrong", {}); w[q.key] = q; saveStore("cet4_wrong", w); }
+  function addWrong(q) { var w = store("cet4_wrong", {}); var prev = w[q.key]; q.box = (prev && prev.box) || 0; q.due = (prev && prev.due) || dstr(0); w[q.key] = q; saveStore("cet4_wrong", w); }
   function removeWrong(k) { var w = store("cet4_wrong", {}); delete w[k]; saveStore("cet4_wrong", w); }
   function getFav() { return store("cet4_fav", {}); }
   function toggleFav(word, meaning) { var f = getFav(); if (f[word] != null) { delete f[word]; saveStore("cet4_fav", f); return false; } f[word] = meaning; saveStore("cet4_fav", f); return true; }
@@ -359,7 +359,7 @@
   var CATS = [
     { k: "words", t: "背单词", d: "背单词 · 复习 · 词书 · 单词量测试 · 词根 · 生词本", ic: "词", c: "#3949AB", mods: ["vocab", "review", "vtest", "vrecords", "roots", "fav"] },
     { k: "exam", t: "真题模考", d: "历年真题 · 原创模拟 · 押题卷 · 全真模拟", ic: "卷", c: "#B71C1C", mods: ["zhenti", "eztor", "yati", "mocks"] },
-    { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "grammar", "collocations"] },
+    { k: "skill", t: "专项练习", d: "听力 · 阅读 · 翻译 · 写作 · 素材 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "reading", "translation", "writing", "writinglib", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
     { k: "me", t: "我的学习", d: "计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav", "monitor"] },
     { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
@@ -380,6 +380,7 @@
     reading: { t: "阅读完形", d: "30 篇 300 题 · 自动批改", ic: "阅", c: "#00897B" },
     translation: { t: "翻译练习", d: "12 篇汉译英 · AI 批改", ic: "译", c: "#5E35B1" },
     writing: { t: "作文批改", d: "12 道题 · AI 评分与范文", ic: "文", c: "#8E24AA" },
+    writinglib: { t: "写作素材库", d: "高分句型 · 万能表达 · 我的好句", ic: "素", c: "#7B1FA2" },
     grammar: { t: "语法要点", d: "15 个核心语法专题", ic: "法", c: "#2E7D32" },
     collocations: { t: "常用短语", d: "126 个高频搭配", ic: "搭", c: "#00838F" },
     ocr: { t: "拍照批改", d: "拍作文/译文/答题卡 → 识别 → 批改 + 建议", ic: "拍", c: "#D81B60" },
@@ -676,17 +677,40 @@
     });
   }
   function renderListeningDetail(s) {
+    var segs = s.segments || [];
     var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(s.theme) + "（" + (LISTEN_LABEL[s.type] || s.type) + "）</div>" +
-      '<div class="card"><audio controls preload="metadata" src="' + esc(s.audio) + '"></audio>' +
-      '<div class="center" style="margin-top:10px"><button class="btn ghost small" id="toggle-tr">显示原文</button></div>' +
-      '<div id="tr-box" style="display:none" class="transcript">' + esc(s.transcript) + "</div></div>" +
-      '<div class="section-title">听力题目</div>' + sectionCard(s.questions) + "</div>";
+      '<div class="card"><audio controls preload="metadata" id="la" style="width:100%" src="' + esc(s.audio) + '"></audio>' +
+      '<div class="row" style="margin-top:8px;justify-content:center">' +
+      '<button class="btn ghost small" data-sp="0.75">0.75×</button>' +
+      '<button class="btn ghost small" data-sp="1">1.0×</button>' +
+      '<button class="btn ghost small" data-sp="1.25">1.25×</button>' +
+      '<button class="btn ghost small" id="toggle-tr">显示原文</button></div>' +
+      '<div id="tr-box" style="display:none" class="transcript">' + esc(s.transcript) + "</div></div>";
+    if (segs.length) {
+      html += '<div class="section-title">精听 · 单句（▶ 播放一句，🔁 循环）</div><div class="card">';
+      segs.forEach(function (seg, i) {
+        html += '<div class="between" style="gap:8px;padding:7px 0;border-bottom:1px solid var(--line)"><span style="flex:1;font-size:14px;line-height:1.5">' + esc(seg.text) + "</span>" +
+          '<button class="btn ghost small" data-seg="' + i + '">▶</button><button class="btn ghost small" data-loop="' + i + '">🔁</button></div>';
+      });
+      html += "</div>";
+    }
+    html += '<div class="section-title">听力题目</div>' + sectionCard(s.questions) + "</div>";
     main.innerHTML = html;
     document.getElementById("backslot").appendChild(backBar("返回", renderListeningList));
+    var au = document.getElementById("la");
+    main.querySelectorAll("[data-sp]").forEach(function (b) { b.onclick = function () { au.playbackRate = parseFloat(b.getAttribute("data-sp")); toast("语速 " + b.getAttribute("data-sp") + "×"); }; });
     document.getElementById("toggle-tr").onclick = function () {
       var box = document.getElementById("tr-box"); var show = box.style.display === "none";
       box.style.display = show ? "block" : "none"; this.textContent = show ? "隐藏原文" : "显示原文";
     };
+    var segMode = null;
+    if (segs.length) {
+      au.addEventListener("timeupdate", function () {
+        if (segMode && au.currentTime >= segMode.end) { if (segMode.loop) { au.currentTime = segMode.start; } else { au.pause(); } }
+      });
+      main.querySelectorAll("[data-seg]").forEach(function (b) { b.onclick = function () { var g = segs[parseInt(b.getAttribute("data-seg"), 10)]; segMode = { start: g.start, end: g.end, loop: false }; au.currentTime = g.start; au.play(); }; });
+      main.querySelectorAll("[data-loop]").forEach(function (b) { b.onclick = function () { var g = segs[parseInt(b.getAttribute("data-loop"), 10)]; segMode = { start: g.start, end: g.end, loop: true }; au.currentTime = g.start; au.play(); }; });
+    }
     bindSection(main.querySelector(".section-card"));
   }
 
@@ -876,7 +900,7 @@
 
     function mcq(q) {
       var opts = (q.options || []).map(strip);
-      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(q.stem || "") + '" data-opts="' + esc(JSON.stringify(opts)) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + diffBadge(q.diff) + q.qno + ". " + esc(q.stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
+      var h = '<div class="zq" data-kind="mcq" data-ans="' + l2i(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-diff="' + esc(q.diff || "") + '" data-stem="' + esc(q.stem || "") + '" data-opts="' + esc(JSON.stringify(opts)) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + diffBadge(q.diff) + q.qno + ". " + esc(q.stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
       (q.options || []).forEach(function (o, oi) {
         h += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + '.</span><span>' + esc(strip(o)) + "</span></div>";
       });
@@ -884,7 +908,7 @@
     }
     function selQ(q, opts, isCloze) {
       var stem = isCloze ? ("第 " + q.qno + " 空") : q.stem;
-      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-stem="' + esc(stem || "") + '" data-opts="' + esc(JSON.stringify(opts.map(function (x) { return x.t; }))) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + diffBadge(q.diff) + q.qno + ". " + esc(stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
+      var h = '<div class="zq" data-kind="sel" data-ans="' + esc(q.answer) + '" data-ansl="' + esc(q.answer) + '" data-qno="' + q.qno + '" data-type="' + esc(q.type) + '" data-diff="' + esc(q.diff || "") + '" data-stem="' + esc(stem || "") + '" data-opts="' + esc(JSON.stringify(opts.map(function (x) { return x.t; }))) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + diffBadge(q.diff) + q.qno + ". " + esc(stem) + qfavStar(p.id + "#" + q.qno) + "</div>";
       h += '<select class="z-sel"><option value="">— 选择 —</option>';
       opts.forEach(function (o) { h += '<option value="' + esc(o.v) + '">' + esc(o.t) + "</option>"; });
       return h + "</select></div>";
@@ -1011,6 +1035,13 @@
           d.className = "explain";
           d.innerHTML = "<b>解析：</b>" + hiExp(exp, kw);
           q.appendChild(d);
+          var df = q.getAttribute("data-diff");
+          if (df === "较难" || df === "高阶") {
+            var mb = document.createElement("button");
+            mb.className = "btn ghost small"; mb.style.marginTop = "6px"; mb.textContent = "AI 更详细解析";
+            mb.onclick = function () { aiQDetail(q, p, mb); };
+            q.appendChild(mb);
+          }
         }
       });
       card.dataset.graded = "1";
@@ -1271,7 +1302,8 @@
     if (!items.length) {
       html += '<div class="info">还没有错题。做真题/练习答错时，会自动收进这里。</div>';
     } else {
-      html += '<div class="row" style="margin-bottom:12px"><button class="btn" id="wq-review">智能复习（最多20题）</button><button class="btn ghost" id="wq-clear">清空</button></div>';
+      var _due = items.filter(function (x) { return (x.due || "") <= todayKey(); }).length;
+      html += '<div class="row" style="margin-bottom:12px"><button class="btn" id="wq-due">记忆曲线复习（到期 ' + _due + '）</button><button class="btn ghost" id="wq-review">全部复习</button><button class="btn ghost" id="wq-clear">清空</button></div>';
       items.forEach(function (q) {
         html += '<div class="wrong-item"><div class="stem">' + esc(q.paper || "") + " · 第" + esc(q.qno) + '题</div>' +
           '<div style="margin:6px 0">' + esc(q.stem || "") + "</div>" +
@@ -1283,12 +1315,13 @@
     html += "</div>";
     main.innerHTML = html;
     if (items.length) {
-      document.getElementById("wq-review").onclick = renderWrongQuiz;
+      document.getElementById("wq-due").onclick = function () { renderWrongQuiz(true); };
+      document.getElementById("wq-review").onclick = function () { renderWrongQuiz(false); };
       document.getElementById("wq-clear").onclick = function () { saveStore("cet4_wrong", {}); renderWrongBook(); };
     }
   }
 
-  function renderWrongQuiz() {
+  function renderWrongQuizOld() {
     var w = store("cet4_wrong", {});
     var items = Object.keys(w).map(function (k) { return w[k]; });
     if (!items.length) { toast("错题本是空的"); return; }
@@ -2083,6 +2116,121 @@
     };
   }
 
+  function aiQDetail(qEl, p, btn) {
+    if (!configured()) { toast("请先在设置中配置 DeepSeek API Key"); return; }
+    var stem = qEl.getAttribute("data-stem"), type = qEl.getAttribute("data-type"), qno = qEl.getAttribute("data-qno"), ans = qEl.getAttribute("data-ansl"), exp = qEl.getAttribute("data-exp");
+    var opts = JSON.parse(qEl.getAttribute("data-opts") || "[]");
+    var ctx = "";
+    if (type === "reading") ctx = (p.readingPassages || {})[qno] || "";
+    else if (type === "cloze") ctx = p.clozePassage || "";
+    else if (type === "match") ctx = (p.matchParagraphs || []).map(function (x) { return x.label + ") " + x.text; }).join("\n");
+    var prompt = "这是一道四级 " + type + " 第" + qno + "题。\n题干：" + (stem || "（略）") + "\n选项：" + opts.join(" | ") + "\n正确答案：" + ans + "\n已有简析：" + exp + "\n" + (ctx ? ("相关原文：" + ctx.slice(0, 1500) + "\n") : "") +
+      "请给出更详细的解析：① 定位依据；② 逐项排除（其它选项为何错）；③ 涉及的词汇/语法/同义替换考点。中文作答、条理清晰。";
+    var old = btn.textContent; btn.disabled = true; btn.textContent = "生成中…";
+    callAI([{ role: "system", content: "你是四级英语老师，讲解要详细、具体、可学会。" }, { role: "user", content: prompt }])
+      .then(function (md) { var d = document.createElement("div"); d.className = "explain"; d.style.marginTop = "6px"; d.innerHTML = mdToHtml(md); qEl.appendChild(d); btn.remove(); })
+      .catch(function (e) { btn.disabled = false; btn.textContent = old; toast("失败：" + e.message); });
+  }
+
+  /* ---------- 写作素材库 ---------- */
+  function renderWritingLib() {
+    var tpl = [
+      { g: "开头句", items: [
+        "With the rapid development of society, ... has become a hotly debated topic. 随着社会发展，……已成为热议话题。",
+        "Nowadays, more and more people are paying attention to ... 如今，越来越多人开始关注……",
+        "When it comes to ..., opinions vary from person to person. 谈到……，人们看法不一。",
+        "It is widely acknowledged that ... 人们普遍认为……"
+      ] },
+      { g: "过渡衔接", items: [
+        "To begin with, ... What's more, ... Last but not least, ... 首先……此外……最后但同样重要的是……",
+        "On the one hand, ... On the other hand, ... 一方面……另一方面……",
+        "In addition / Moreover / Furthermore, ... 此外……",
+        "However, every coin has two sides. 然而，凡事都有两面。"
+      ] },
+      { g: "举例论证", items: [
+        "Take ... as an example. 以……为例。",
+        "A case in point is that ... 一个恰当的例子是……",
+        "As is shown in the survey, ... 正如调查所示……",
+        "This can be illustrated by ... 这可以用……来说明。"
+      ] },
+      { g: "结尾句", items: [
+        "In conclusion / To sum up, ... 总之……",
+        "Therefore, it is high time that we took measures to ... 因此，我们该采取措施……",
+        "Only in this way can we ... 只有这样我们才能……",
+        "As far as I am concerned, ... 就我而言……"
+      ] },
+      { g: "建议信 / 应用文", items: [
+        "I am writing to express my views concerning ... 我写信是为了就……表达看法。",
+        "It would be appreciated if you could take my suggestions into consideration. 若您能考虑我的建议，我将不胜感激。",
+        "I am looking forward to your early reply. 期待您的早日回复。",
+        "Please feel free to contact me if you need further information. 如需更多信息，请随时联系我。"
+      ] },
+      { g: "高分替换词", items: [
+        "important → vital / essential / crucial",
+        "many → numerous / a great many / a host of",
+        "very → extremely / highly / remarkably",
+        "think → hold the view that / maintain / argue that",
+        "good → beneficial / rewarding / favorable",
+        "bad → harmful / adverse / detrimental",
+        "get → obtain / acquire / gain",
+        "help → assist / facilitate / contribute to"
+      ] }
+    ];
+    var custom = store("cet4_sentences", []);
+    var html = '<div class="page"><div class="section-title">写作素材库</div><div class="info">按结构分类的高分句型/表达，考试直接套用；下方可加自己的好句。</div>';
+    tpl.forEach(function (grp) {
+      html += '<div class="section-title">' + esc(grp.g) + '</div><div class="card">' + grp.items.map(function (s) { return '<div style="padding:6px 0;border-bottom:1px solid var(--line);line-height:1.6">' + esc(s) + "</div>"; }).join("") + "</div>";
+    });
+    html += '<div class="section-title">我的好句（' + custom.length + '）</div><div class="card"><textarea id="sent-add" rows="2" placeholder="粘贴/输入一句好句…"></textarea>' +
+      '<button class="btn block" id="sent-save" style="margin-top:8px">添加</button>' +
+      custom.map(function (s, i) { return '<div class="between" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1;line-height:1.5">' + esc(s) + '</span><button class="star" data-del="' + i + '" style="color:#c62828">×</button></div>'; }).join("") + "</div></div>";
+    main.innerHTML = html;
+    document.getElementById("sent-save").onclick = function () { var v = document.getElementById("sent-add").value.trim(); if (!v) return; var c = store("cet4_sentences", []); c.push(v); saveStore("cet4_sentences", c); renderWritingLib(); };
+    main.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = function () { var c = store("cet4_sentences", []); c.splice(parseInt(b.getAttribute("data-del"), 10), 1); saveStore("cet4_sentences", c); renderWritingLib(); }; });
+  }
+
+  /* ---------- 错题记忆曲线复习 ---------- */
+  function renderWrongQuiz(dueOnly) {
+    var w = store("cet4_wrong", {});
+    var t = todayKey();
+    var items = Object.keys(w).map(function (k) { return w[k]; }).filter(function (x) { return !dueOnly || (x.due || "") <= t; });
+    if (!items.length) { toast(dueOnly ? "今日没有到期的错题" : "错题本是空的"); return; }
+    items = shuffle(items).slice(0, 20);
+    var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + (dueOnly ? "记忆曲线复习" : "错题复习") + "（" + items.length + " 题）</div><div class=\"card section-card\">";
+    items.forEach(function (q, i) {
+      html += '<div class="zq" data-kind="mcq" data-ans="' + A2I(q.answer) + '" data-key="' + esc(q.key) + '" data-exp="' + esc(q.exp || "") + '" data-kw="' + esc(JSON.stringify(q.kw || [])) + '"><div class="stem">' + (i + 1) + ". " + esc(q.stem || ("第" + q.qno + "题")) + "</div>";
+      (q.options || []).forEach(function (o, oi) { html += '<div class="opt" data-oi="' + oi + '"><span class="k">' + String.fromCharCode(65 + oi) + ".</span><span>" + esc(stripA(o)) + "</span></div>"; });
+      html += "</div>";
+    });
+    html += '<button class="btn block submit-btn">提交</button></div></div>';
+    main.innerHTML = html;
+    document.getElementById("backslot").appendChild(backBar("返回", renderWrongBook));
+    var submitted = false;
+    main.querySelectorAll(".opt").forEach(function (el) {
+      el.onclick = function () { if (submitted) return; var q = el.closest(".zq"); q.querySelectorAll(".opt").forEach(function (x) { x.classList.remove("sel"); }); el.classList.add("sel"); };
+    });
+    main.querySelector(".submit-btn").onclick = function () {
+      if (submitted) return;
+      submitted = true;
+      var c = 0, t2 = 0;
+      main.querySelectorAll(".zq").forEach(function (q) {
+        t2++;
+        var ans = parseInt(q.getAttribute("data-ans"), 10), sel = q.querySelector(".opt.sel"), ok = false;
+        q.querySelectorAll(".opt").forEach(function (o) { o.classList.add("locked"); var oi = parseInt(o.getAttribute("data-oi"), 10); if (oi === ans) o.classList.add("correct"); else if (sel && o === sel) o.classList.add("wrong"); });
+        ok = sel && parseInt(sel.getAttribute("data-oi"), 10) === ans;
+        if (ok) c++;
+        recordAnswer("review", ok);
+        var key = q.getAttribute("data-key"), ww = store("cet4_wrong", {}), rec = ww[key];
+        if (rec) { if (ok) { rec.box = (rec.box || 0) + 1; if (rec.box >= 3) { delete ww[key]; } else { rec.due = dstr(SRS_INT[Math.min(rec.box, 6)]); ww[key] = rec; } } else { rec.box = 0; rec.due = dstr(0); ww[key] = rec; } saveStore("cet4_wrong", ww); }
+        var exp = q.getAttribute("data-exp");
+        if (exp) { var kw = []; try { kw = JSON.parse(q.getAttribute("data-kw") || "[]"); } catch (e) { } var d = document.createElement("div"); d.className = "explain"; d.innerHTML = "<b>解析：</b>" + hiExp(exp, kw); q.appendChild(d); }
+      });
+      toast("答对 " + c + " / " + t2 + "（连对 3 次出库）");
+      this.textContent = "完成";
+      this.disabled = true;
+    };
+  }
+
   /* ---------- settings ---------- */
   function openSettings() {
     var s = getSettings();
@@ -2148,6 +2296,7 @@
     else if (name === "reading") renderReadingList();
     else if (name === "listening") renderListeningList();
     else if (name === "writing") renderWritingList();
+    else if (name === "writinglib") renderWritingLib();
     else if (name === "translation") renderTranslationList();
     else if (name === "grammar") renderGrammarList();
     else if (name === "collocations") renderCollocations();

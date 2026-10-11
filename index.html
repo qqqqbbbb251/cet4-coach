@@ -21,6 +21,13 @@
 </header>
 <main id="main"></main>
 <div id="toast" class="toast"></div>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('./sw.js').catch(function () { });
+    });
+  }
+</script>
 <script src="data/data.js"></script>
 <script src="data/zhenti.js"></script>
 <script src="data/zaudio.js"></script>
