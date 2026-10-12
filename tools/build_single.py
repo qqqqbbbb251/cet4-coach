@@ -66,6 +66,7 @@ html = """<!DOCTYPE html>
 </header>
 <main id="main"></main>
 <div id="toast" class="toast"></div>
+<script>window.CET4_ALL_INLINE = true;</script>
 <script>
 """ + data + """
 </script>

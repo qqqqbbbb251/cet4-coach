@@ -1,10 +1,9 @@
-const CACHE = "cet4-v17";
+const CACHE = "cet4-v18";
+// 只预缓存首屏所需；其余 data/*.js、音频等按需加载后由 fetch 处理器自动缓存
 const CORE = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
-  "./data/data.js", "./data/zhenti.js", "./data/zaudio.js", "./data/wordmeta.js",
-  "./data/roots.js", "./data/eztor.js", "./data/papers.js", "./data/words_extra.js", "./data/vocabtest.js", "./data/wordcolloc.js", "./data/voa.js", "./data/dict.js", "./data/grammar.js", "./data/wordform.js", "./data/waudio.js", "./data/guide.js"
+  "./data/data.js", "./data/wordmeta.js"
 ];
-for (let i = 1; i <= 24; i++) CORE.push("./assets/audio/listen-" + (i < 10 ? "0" + i : i) + ".mp3");
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {

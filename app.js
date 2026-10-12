@@ -12,6 +12,45 @@
   function goBack() { if (VIEWS.length > 1) { try { history.back(); return; } catch (e) { } VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } updateBackBtn(); } }
   window.addEventListener("popstate", function () { if (VIEWS.length > 1) { VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } } updateBackBtn(); });
 
+  /* ---------- 按需加载重资源（首屏只加载 data.js + wordmeta.js + app.js） ---------- */
+  var ASSET_V = "18";
+  var NEED = {
+    zhenti: ["data/zhenti.js", "data/zaudio.js"],
+    eztor: ["data/eztor.js", "data/zhenti.js", "data/zaudio.js"],
+    yati: ["data/papers.js"],
+    reading: ["data/zhenti.js", "data/zaudio.js"],
+    listening: ["data/zhenti.js", "data/zaudio.js"],
+    writing: ["data/zhenti.js", "data/zaudio.js"],
+    translation: ["data/zhenti.js", "data/zaudio.js"],
+    vocab: ["data/words_extra.js", "data/wordform.js", "data/dict.js", "data/wordcolloc.js", "data/waudio.js"],
+    vtest: ["data/vocabtest.js", "data/waudio.js"],
+    roots: ["data/roots.js"],
+    grammar: ["data/grammar.js"],
+    voa: ["data/voa.js"],
+    fav: ["data/dict.js"],
+    guide: ["data/guide.js"]
+  };
+  var _loadedScripts = {};
+  function refreshGlobals() { if (window.CET4_DATA) DATA = window.CET4_DATA; if (window.CET4_ZHENTI) ZHENTI = window.CET4_ZHENTI; }
+  function loadScript(src) {
+    if (window.CET4_ALL_INLINE || _loadedScripts[src]) return Promise.resolve();
+    return new Promise(function (res) {
+      var s = document.createElement("script");
+      s.src = src + (src.indexOf("?") < 0 ? ("?v=" + ASSET_V) : "");
+      s.onload = function () { _loadedScripts[src] = 1; res(); };
+      s.onerror = function () { res(); };
+      document.head.appendChild(s);
+    });
+  }
+  function ensureView(name) {
+    if (window.CET4_ALL_INLINE) return Promise.resolve();
+    var list = NEED[name] || [];
+    var missing = list.filter(function (s) { return !_loadedScripts[s]; });
+    if (!missing.length) return Promise.resolve();
+    main.innerHTML = '<div class="page"><div class="info">加载中…（首次进入需联网）</div></div>';
+    return Promise.all(missing.map(loadScript)).then(function () { refreshGlobals(); });
+  }
+
 
   /* ---------- helpers ---------- */
   function esc(s) {
@@ -2870,7 +2909,11 @@
 
   /* ---------- router ---------- */
   var currentView = "home";
-  function openView(name) { if (name === currentView && name !== "home") { _renderView(name); updateBackBtn(); return; } go(function () { _renderView(name); }); }
+  function openView(name) {
+    var finish = function () { if (name === currentView && name !== "home") { _renderView(name); updateBackBtn(); return; } go(function () { _renderView(name); }); };
+    if (!NEED[name] || window.CET4_ALL_INLINE) { finish(); return; }
+    ensureView(name).then(finish);
+  }
   function goHome() { VIEWS = [function () { _renderView("home"); }]; try { history.replaceState({ v: 1 }, ""); } catch (e) { } currentView = "home"; _renderView("home"); window.scrollTo(0, 0); updateBackBtn(); }
   function _renderView(name) {
     currentView = name; window.scrollTo(0, 0);
