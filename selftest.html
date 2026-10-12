@@ -25,22 +25,22 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=14"></script>
-<script src="data/zhenti.js?v=14"></script>
-<script src="data/zaudio.js?v=14"></script>
-<script src="data/wordmeta.js?v=14"></script>
-<script src="data/roots.js?v=14"></script>
-<script src="data/eztor.js?v=14"></script>
-<script src="data/papers.js?v=14"></script>
-<script src="data/words_extra.js?v=14"></script>
-<script src="data/vocabtest.js?v=14"></script>
-<script src="data/wordcolloc.js?v=14"></script>
-<script src="data/voa.js?v=14"></script>
-<script src="data/dict.js?v=14"></script>
-<script src="data/grammar.js?v=14"></script>
-<script src="data/wordform.js?v=14"></script>
-<script src="data/waudio.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="data/data.js?v=15"></script>
+<script src="data/zhenti.js?v=15"></script>
+<script src="data/zaudio.js?v=15"></script>
+<script src="data/wordmeta.js?v=15"></script>
+<script src="data/roots.js?v=15"></script>
+<script src="data/eztor.js?v=15"></script>
+<script src="data/papers.js?v=15"></script>
+<script src="data/words_extra.js?v=15"></script>
+<script src="data/vocabtest.js?v=15"></script>
+<script src="data/wordcolloc.js?v=15"></script>
+<script src="data/voa.js?v=15"></script>
+<script src="data/dict.js?v=15"></script>
+<script src="data/grammar.js?v=15"></script>
+<script src="data/wordform.js?v=15"></script>
+<script src="data/waudio.js?v=15"></script>
+<script src="app.js?v=15"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -121,6 +121,9 @@
     q('#main [data-cat="words"]').click();
     q('#main [data-go="vocab"]').click();
     ok("vocab study renders cards", qa("#vocab-body .card").length > 0);
+    q("#learn-next").click();
+    var vlog = JSON.parse(localStorage.getItem("cet4_vocab") || "null");
+    ok("studying records vocab immediately", !!vlog && vlog.total > 0, "total=" + (vlog && vlog.total));
   } catch (e) { ok("vocab study renders cards", false, String(e)); }
 
   function testVocabThenAI() {

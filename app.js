@@ -132,6 +132,13 @@
   }
   function getVocabLog() { return store("cet4_vocab", { days: {}, learned: {}, total: 0 }); }
   function saveVocabLog(v) { saveStore("cet4_vocab", v); }
+  function recordVocabSeen(words) {
+    var log = getVocabLog(), d = todayKey(), added = 0;
+    log.days = log.days || {}; log.learned = log.learned || {};
+    (words || []).forEach(function (w) { if (!(w.w in log.learned)) { log.learned[w.w] = "learning"; added++; } });
+    if (added) { log.days[d] = (log.days[d] || 0) + added; log.total = (log.total || 0) + added; saveVocabLog(log); autoSync(); }
+    return added;
+  }
   function exampleOf(word) { var v = (DATA.vocabulary || []).filter(function (x) { return x.word === word; })[0]; return v ? v.example : ""; }
 
   /* ---------- SRS 记忆曲线 ---------- */
@@ -2238,7 +2245,7 @@
       body.innerHTML = h;
       body.querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { playWord(words[parseInt(b.getAttribute("data-say"), 10)].w); }; });
       body.querySelectorAll("[data-dic]").forEach(function (b) { b.onclick = function () { var i = parseInt(b.getAttribute("data-dic"), 10); lookupWord(words[i].w, document.getElementById("dicbox-" + i)); }; });
-      document.getElementById("learn-next").onclick = function () { si++; step(); };
+      document.getElementById("learn-next").onclick = function () { recordVocabSeen(words); si++; step(); };
     }
     function quiz(g, kind) {
       var words = groups[g], blk = [];
@@ -2281,8 +2288,8 @@
       var allw = [].concat.apply([], groups);
       var mastered = allw.filter(function (w) { var p = pass[w.w]; return p.a && p.b && p.s; });
       var need = allw.filter(function (w) { var p = pass[w.w]; return !(p.a && p.b && p.s); });
-      var log = getVocabLog(), d = todayKey();
-      log.days[d] = (log.days[d] || 0) + allw.length; log.total = (log.total || 0) + allw.length;
+      var log = getVocabLog();
+      log.learned = log.learned || {}; log.days = log.days || {};
       allw.forEach(function (w) { var ms = pass[w.w].a && pass[w.w].b && pass[w.w].s; log.learned[w.w] = ms ? "k" : "u"; srsUpdate(w.w, w.m, ms); });
       saveVocabLog(log);
       autoSync();
