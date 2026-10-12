@@ -1,4 +1,4 @@
-const CACHE = "cet4-v16";
+const CACHE = "cet4-v17";
 const CORE = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",
   "./data/data.js", "./data/zhenti.js", "./data/zaudio.js", "./data/wordmeta.js",

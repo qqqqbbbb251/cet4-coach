@@ -211,7 +211,8 @@
   }
   function fullSnapshot() { var s = buildSnapshot(); s.backup = snapshotAll(); return s; }
   function syncCfg() { return { url: store("cet4_syncurl", ""), key: store("cet4_synckey", ""), name: store("cet4_syncname", "学生") }; }
-  function pushSync() {
+  function pushSync(tries) {
+    tries = tries || 0;
     var c = syncCfg();
     if (!c.url) return Promise.reject(new Error("未配置同步地址"));
     var base = c.url.replace(/\/+$/, "");
@@ -219,7 +220,11 @@
     if (c.key) { headers["apikey"] = c.key; headers["Authorization"] = "Bearer " + c.key; }
     headers["Prefer"] = "resolution=merge-duplicates";
     return fetch(base + "/rest/v1/sync", { method: "POST", headers: headers, body: JSON.stringify([{ id: c.name, data: fullSnapshot() }]) })
-      .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("同步失败 " + r.status + " " + t.slice(0, 120)); }); return true; });
+      .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("同步失败 " + r.status + " " + t.slice(0, 120)); }); return true; })
+      .catch(function (err) {
+        if (tries < 3) return new Promise(function (res) { setTimeout(res, 1500 * (tries + 1)); }).then(function () { return pushSync(tries + 1); });
+        throw err;
+      });
   }
   function pullSync() {
     var c = syncCfg();
@@ -566,6 +571,7 @@
           if (selected !== null) return;
           selected = parseInt(el.getAttribute("data-i"), 10); total++;
           if (selected === correctK) score++;
+          recordAnswer("vocab", selected === correctK);
           draw();
         };
       });
@@ -623,7 +629,7 @@
       html += '<button class="btn block" id="enq-btn" ' + (selected === null ? "disabled" : "") + ">" + (selected === null ? "请选择答案" : "下一题") + "</button>";
       body.innerHTML = html;
       body.querySelectorAll(".opt").forEach(function (el) {
-        el.onclick = function () { if (selected !== null) return; selected = parseInt(el.getAttribute("data-i"), 10); total++; if (selected === correctK) score++; draw(); };
+        el.onclick = function () { if (selected !== null) return; selected = parseInt(el.getAttribute("data-i"), 10); total++; if (selected === correctK) score++; recordAnswer("vocab", selected === correctK); draw(); };
       });
       document.getElementById("enq-btn").onclick = function () { if (selected !== null) newQ(); };
     }
@@ -1350,13 +1356,16 @@
   function renderFavList() {
     var f = getFav();
     var words = Object.keys(f);
+    var dic = window.CET4_DICT || {};
     var html = '<div class="page"><div class="section-title">生词本（' + words.length + '）</div>';
     if (!words.length) { html += '<div class="info">还没有收藏单词。在「单词检测 → 重点词汇」或单词卡里点 ★ 收藏。</div>'; }
     words.forEach(function (w) {
-      html += '<div class="card"><div class="between"><b style="font-size:17px;color:var(--primary)">' + esc(w) + '</b><button class="star on" data-rm="' + esc(w) + '">★</button></div><div style="margin-top:6px">' + esc(f[w]) + "</div></div>";
+      var ph = (dic[String(w).toLowerCase()] || [])[0] || "";
+      html += '<div class="card"><div class="between"><b style="font-size:17px;color:var(--primary)">' + esc(w) + (ph ? ' <span class="muted" style="font-weight:400">/' + esc(ph) + "/</span>" : "") + '</b><span><button class="star" data-say="' + esc(w) + '">🔊</button><button class="star on" data-rm="' + esc(w) + '">★</button></span></div><div style="margin-top:6px">' + esc(f[w]) + "</div></div>";
     });
     html += "</div>";
     main.innerHTML = html;
+    main.querySelectorAll("[data-say]").forEach(function (b) { b.onclick = function () { playWord(b.getAttribute("data-say")); }; });
     main.querySelectorAll("[data-rm]").forEach(function (b) { b.onclick = function () { toggleFav(b.getAttribute("data-rm")); renderFavList(); }; });
   }
 
@@ -1551,7 +1560,7 @@
     if (!daily[key(dd)]) dd.setDate(dd.getDate() - 1);
     for (; ;) { var dr = daily[key(dd)]; if (dr && dr.answers) { streak++; dd.setDate(dd.getDate() - 1); } else break; }
     var days = Math.max(0, Math.ceil((new Date("2026-12-12T09:00:00") - new Date()) / 86400000));
-    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", obj: "练习" };
+    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", obj: "练习", vocab: "词汇" };
     var types = p.types || {}, weak = null, weakR = 101;
     for (var t in types) { var x = types[t]; if (x.a >= 3) { var rr = x.c / x.a * 100; if (rr < weakR) { weakR = rr; weak = typeNames[t] || t; } } }
     return { a: p.a, c: p.c, acc: acc, est: est, wrong: wrong, qfav: qfav, fav: fav, checkin: checkin, streak: streak, days: days, types: types, typeNames: typeNames, weak: weak, weakR: Math.round(weakR < 101 ? weakR : 0), exams: examList(), examAvg: examAvg() };
@@ -1648,7 +1657,7 @@
   }
   function learnerContext() {
     var p = store("cet4_progress", { a: 0, c: 0, types: {} });
-    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", spell: "拼写", obj: "练习" };
+    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", spell: "拼写", obj: "练习", vocab: "词汇" };
     var types = p.types || {}, rows = [];
     Object.keys(types).forEach(function (k) { if (types[k].a > 0) rows.push((typeNames[k] || k) + " " + types[k].c + "/" + types[k].a + "(" + Math.round(types[k].c / types[k].a * 100) + "%)"); });
     var v = getVocabLog(), ex = examList();
@@ -1813,7 +1822,7 @@
     var pest = p.a ? Math.min(710, Math.round(p.c / p.a * 497 + 128)) : 0;
     var exams = examList();
     var examAvgV = examAvg();
-    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", spell: "拼写", obj: "练习" };
+    var typeNames = { listening: "听力", cloze: "选词填空", match: "信息匹配", reading: "仔细阅读", review: "错题复习", spell: "拼写", obj: "练习", vocab: "词汇" };
     var wrongN = Object.keys(store("cet4_wrong", {})).length;
     var favN = Object.keys(getFav()).length;
 
@@ -2391,16 +2400,22 @@
   /* ---------- 监督看板（远程查看她的数据） ---------- */
   function renderMonitor() {
     main.innerHTML = '<div class="page"><div class="section-title">监督看板</div>' +
-      '<div class="info">配置好云同步后（见「设置 → 云同步」），这里可查看她的学习数据与进步曲线。也可在 Supabase 后台直接看表。</div>' +
+      '<div class="info">配置好云同步后（见「设置 → 云同步」），这里可查看学习数据。也可在 Supabase 后台直接看表。</div>' +
+      '<div class="row" style="margin-bottom:8px"><input type="text" id="mon-filter" placeholder="只看某个同步码（留空=全部）" style="flex:1"><label class="muted" style="display:flex;align-items:center;gap:6px;white-space:nowrap"><input type="checkbox" id="mon-mine"> 隐藏我这台</label></div>' +
       '<button class="btn block" id="mon-load">读取云端数据</button><div id="mon-res" style="margin-top:12px"></div></div>';
     document.getElementById("mon-load").onclick = function () {
       var c = syncCfg();
       if (!c.url) { toast("请先在设置里配置云同步地址"); return; }
       var res = document.getElementById("mon-res"); res.innerHTML = '<div class="muted">读取中…</div>';
+      var filter = (document.getElementById("mon-filter").value || "").trim().toLowerCase();
+      var hideMine = document.getElementById("mon-mine").checked;
+      var myname = c.name;
       pullSync().then(function (rows) {
         rows = (rows || []).filter(function (r) { var d = r.data || {}; return !!d.backup || d.total != null || (d.vocab && d.vocab.total) || (d.exams && d.exams.length); });
+        if (filter) rows = rows.filter(function (r) { return String(r.id || "").toLowerCase().indexOf(filter) >= 0 || String((r.data || {}).name || "").toLowerCase().indexOf(filter) >= 0; });
+        if (hideMine) rows = rows.filter(function (r) { return r.id !== myname; });
         rows.sort(function (a, b) { return String((b.data || {}).updated || "").localeCompare(String((a.data || {}).updated || "")); });
-        if (!rows.length) { res.innerHTML = '<div class="info">云端暂无有效数据（她还需要在设置里配置同步并点「保存并立即同步」）。</div>'; return; }
+        if (!rows.length) { res.innerHTML = '<div class="info">没有匹配的云端数据（她还需要在设置里配置同步并点「保存并立即同步」）。</div>'; return; }
         var h = "";
         rows.forEach(function (row) {
           var s = row.data || {};
@@ -2837,7 +2852,7 @@
       saveStore("cet4_syncname", document.getElementById("set-syncname").value.trim() || "学生");
       var msg = document.getElementById("set-msg");
       msg.innerHTML = '<div class="info">同步中…</div>';
-      pushSync().then(function () { msg.innerHTML = '<div class="info">已同步到云端。</div>'; }).catch(function (e) { msg.innerHTML = '<div class="info warn">同步失败：' + esc(e.message) + "</div>"; });
+      pushSync().then(function () { msg.innerHTML = '<div class="info">✅ 已同步到云端。</div>'; }).catch(function (e) { msg.innerHTML = '<div class="info warn">同步失败（多为网络问题，会自动重试；本地数据已保存）。<br><span class="muted">' + esc(e.message) + "</span></div>"; toast("同步失败，稍后自动重试"); });
     };
     document.getElementById("set-dash2").onclick = function () { close(); openView("monitor"); };
     document.getElementById("set-test").onclick = function () {
