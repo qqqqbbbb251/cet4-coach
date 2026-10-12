@@ -8,6 +8,7 @@
 <body>
 <header id="appbar">
   <div class="bar-inner">
+    <button id="btn-back" class="icon-btn" aria-label="返回" style="display:none">‹</button>
     <button id="btn-home" class="brand">四级备考 · CET-4</button>
     <div class="bar-actions">
       <button id="btn-dash" class="icon-btn" aria-label="仪表盘"></button>
@@ -24,22 +25,22 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=13"></script>
-<script src="data/zhenti.js?v=13"></script>
-<script src="data/zaudio.js?v=13"></script>
-<script src="data/wordmeta.js?v=13"></script>
-<script src="data/roots.js?v=13"></script>
-<script src="data/eztor.js?v=13"></script>
-<script src="data/papers.js?v=13"></script>
-<script src="data/words_extra.js?v=13"></script>
-<script src="data/vocabtest.js?v=13"></script>
-<script src="data/wordcolloc.js?v=13"></script>
-<script src="data/voa.js?v=13"></script>
-<script src="data/dict.js?v=13"></script>
-<script src="data/grammar.js?v=13"></script>
-<script src="data/wordform.js?v=13"></script>
-<script src="data/waudio.js?v=13"></script>
-<script src="app.js?v=13"></script>
+<script src="data/data.js?v=14"></script>
+<script src="data/zhenti.js?v=14"></script>
+<script src="data/zaudio.js?v=14"></script>
+<script src="data/wordmeta.js?v=14"></script>
+<script src="data/roots.js?v=14"></script>
+<script src="data/eztor.js?v=14"></script>
+<script src="data/papers.js?v=14"></script>
+<script src="data/words_extra.js?v=14"></script>
+<script src="data/vocabtest.js?v=14"></script>
+<script src="data/wordcolloc.js?v=14"></script>
+<script src="data/voa.js?v=14"></script>
+<script src="data/dict.js?v=14"></script>
+<script src="data/grammar.js?v=14"></script>
+<script src="data/wordform.js?v=14"></script>
+<script src="data/waudio.js?v=14"></script>
+<script src="app.js?v=14"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -89,6 +90,9 @@
   ok("data modal has local-backup restore", !!q("#io-bakrestore"));
   q("#io-close").click();
   q("#set-close").click();
+  q("#btn-home").click();
+  q('#main [data-cat="words"]').click();
+  ok("back button appears after navigating", !!q("#btn-back") && q("#btn-back").style.display !== "none");
 
   var cats = ["words", "exam", "skill", "ai", "me", "more"];
   cats.forEach(function (c) {

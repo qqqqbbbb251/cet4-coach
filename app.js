@@ -5,6 +5,14 @@
   var ZHENTI = window.CET4_ZHENTI || [];
   var main = document.getElementById("main");
 
+  /* ---------- 视图导航栈（顶部返回键 + 手机系统返回） ---------- */
+  var VIEWS = [];
+  function updateBackBtn() { var b = document.getElementById("btn-back"); if (b) b.style.display = (VIEWS.length > 1) ? "" : "none"; }
+  function go(fn) { VIEWS.push(fn); try { history.pushState({ v: VIEWS.length }, ""); } catch (e) { } fn(); window.scrollTo(0, 0); updateBackBtn(); }
+  function goBack() { if (VIEWS.length > 1) { try { history.back(); return; } catch (e) { } VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } updateBackBtn(); } }
+  window.addEventListener("popstate", function () { if (VIEWS.length > 1) { VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } } updateBackBtn(); });
+
+
   /* ---------- helpers ---------- */
   function esc(s) {
     return String(s == null ? "" : s)
@@ -432,23 +440,23 @@
     main.innerHTML = html;
     main.querySelectorAll("[data-cat]").forEach(function (el) { el.onclick = function () { renderCategory(el.getAttribute("data-cat")); }; });
   }
-  function renderCategory(k) {
+  function renderCategory(k) { go(function () { _renderCategory(k); }); }
+  function _renderCategory(k) {
     var cat = CATS.filter(function (c) { return c.k === k; })[0];
     if (!cat) { renderHome(); return; }
-    var html = '<div class="page"><div id="backslot"></div><div class="section-title">' + esc(cat.t) + '</div><div class="grid">';
+    var html = '<div class="page"><div class="section-title">' + esc(cat.t) + '</div><div class="grid">';
     cat.mods.forEach(function (m) {
       var x = MODS[m]; if (!x) return;
       html += '<div class="fcard" data-go="' + m + '"><div class="ic" style="background:' + x.c + '1f;color:' + x.c + '">' + x.ic + '</div><div class="txt"><h3>' + x.t + '</h3><p>' + x.d + '</p></div><div class="arrow">›</div></div>';
     });
     html += "</div></div>";
     main.innerHTML = html;
-    document.getElementById("backslot").appendChild(backBar("返回", renderHome));
     main.querySelectorAll("[data-go]").forEach(function (el) { el.onclick = function () { openView(el.getAttribute("data-go")); }; });
   }
   function backBar(label, fn) {
     var b = document.createElement("button");
     b.className = "btn ghost small"; b.textContent = "‹ " + (label || "返回");
-    b.onclick = fn; return b;
+    b.onclick = function () { goBack(); }; return b;
   }
   function listPage(title, items, renderRow, onClick) {
     var html = '<div class="page"><div class="section-title">' + esc(title) + "</div><div id='listbox'>";
@@ -456,13 +464,13 @@
     html += "</div></div>";
     main.innerHTML = html;
     main.querySelectorAll("[data-idx]").forEach(function (el) {
-      el.onclick = function () { onClick(items[parseInt(el.getAttribute("data-idx"), 10)]); };
+      el.onclick = function () { var it = items[parseInt(el.getAttribute("data-idx"), 10)]; go(function () { onClick(it); }); };
     });
   }
   function listPageInto(container, items, renderRow, onClick) {
     container.innerHTML = '<div class="section-title">共 ' + items.length + " 套</div>" + items.map(renderRow).join("");
     container.querySelectorAll("[data-idx]").forEach(function (el) {
-      el.onclick = function () { onClick(items[parseInt(el.getAttribute("data-idx"), 10)]); };
+      el.onclick = function () { var it = items[parseInt(el.getAttribute("data-idx"), 10)]; go(function () { onClick(it); }); };
     });
   }
   function moduleView(o) {
@@ -952,10 +960,12 @@
     main.querySelectorAll("[data-open]").forEach(function (el) {
       el.onclick = function () {
         var id = el.getAttribute("data-open"), kind = el.getAttribute("data-kind");
-        if (kind === "listen") renderListeningDetail(byId(DATA.listening, id));
-        else if (kind === "read") renderReadingDetail(byId(DATA.reading, id));
-        else if (kind === "trans") renderTranslationDetail(byId(DATA.translations, id));
-        else if (kind === "write") renderWritingDetail(byId(DATA.writing, id));
+        go(function () {
+          if (kind === "listen") renderListeningDetail(byId(DATA.listening, id));
+          else if (kind === "read") renderReadingDetail(byId(DATA.reading, id));
+          else if (kind === "trans") renderTranslationDetail(byId(DATA.translations, id));
+          else if (kind === "write") renderWritingDetail(byId(DATA.writing, id));
+        });
       };
     });
   }
@@ -1308,8 +1318,8 @@
     html += "</div>";
     main.innerHTML = html;
     if (items.length) {
-      document.getElementById("wq-due").onclick = function () { renderWrongQuiz(true); };
-      document.getElementById("wq-review").onclick = function () { renderWrongQuiz(false); };
+    document.getElementById("wq-due").onclick = function () { go(function () { renderWrongQuiz(true); }); };
+    document.getElementById("wq-review").onclick = function () { go(function () { renderWrongQuiz(false); }); };
       document.getElementById("wq-clear").onclick = function () { saveStore("cet4_wrong", {}); renderWrongBook(); };
     }
   }
@@ -1344,7 +1354,7 @@
           '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
       }).join("");
       box.querySelectorAll("[data-root]").forEach(function (el) {
-        el.onclick = function () { var r = roots.find(function (x) { return x.root === el.getAttribute("data-root"); }); if (r) renderRootDetail(r); };
+        el.onclick = function () { var r = roots.find(function (x) { return x.root === el.getAttribute("data-root"); }); if (r) go(function () { renderRootDetail(r); }); };
       });
     }
     document.getElementById("rt-search").oninput = function () { draw(this.value); };
@@ -2575,8 +2585,8 @@
     a.slice().reverse().forEach(function (x) { html += '<div class="card"><div class="between"><span><b style="color:#c62828">' + esc(x.wrong) + '</b> → <b style="color:#2e7d32">' + esc(x.correct) + '</b></span><span class="muted">' + esc(x.type) + ' <button class="star" data-del="' + esc(x.id) + '" style="color:#c62828">×</button></span></div>' + (x.note ? '<div class="muted" style="margin-top:4px">' + esc(x.note) + "</div>" : "") + "</div>"; });
     html += "</div>";
     main.innerHTML = html;
-    document.getElementById("eb-due").onclick = function () { reviewErrItems(a.filter(function (x) { return (x.due || "") <= t; }), "到期错词"); };
-    document.getElementById("eb-all").onclick = function () { reviewErrItems(a, "错词复习"); };
+    document.getElementById("eb-due").onclick = function () { go(function () { reviewErrItems(a.filter(function (x) { return (x.due || "") <= t; }), "到期错词"); }); };
+    document.getElementById("eb-all").onclick = function () { go(function () { reviewErrItems(a, "错词复习"); }); };
     document.getElementById("eb-add").onclick = function () { var w = document.getElementById("eb-w").value.trim(), c = document.getElementById("eb-c").value.trim(); if (!w || !c) { toast("请填写错的和对的"); return; } addErrItems([{ wrong: w, correct: c, type: document.getElementById("eb-t").value }]); renderErrBook(); };
     main.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = function () { saveErrBook(getErrBook().filter(function (x) { return String(x.id) !== b.getAttribute("data-del"); })); renderErrBook(); }; });
   }
@@ -2599,8 +2609,8 @@
     });
     html += "</div>";
     main.innerHTML = html;
-    document.getElementById("cb-due").onclick = function () { reviewColloc(list.filter(function (x) { return (srs[x.en] && srs[x.en].d || "") <= t; }), "到期搭配"); };
-    document.getElementById("cb-all").onclick = function () { reviewColloc(list, "搭配复习"); };
+    document.getElementById("cb-due").onclick = function () { go(function () { reviewColloc(list.filter(function (x) { return (srs[x.en] && srs[x.en].d || "") <= t; }), "到期搭配"); }); };
+    document.getElementById("cb-all").onclick = function () { go(function () { reviewColloc(list, "搭配复习"); }); };
     document.getElementById("cb-add").onclick = function () { var en = document.getElementById("cb-en").value.trim(), zh = document.getElementById("cb-zh").value.trim(); if (!en) { toast("请填英文搭配"); return; } var c = store("cet4_colloc_custom", []); c.push({ en: en, zh: zh }); saveStore("cet4_colloc_custom", c); renderCollocBook(); };
   }
   function reviewColloc(list, title) {
@@ -2799,7 +2809,9 @@
 
   /* ---------- router ---------- */
   var currentView = "home";
-  function openView(name) {
+  function openView(name) { if (name === currentView && name !== "home") { _renderView(name); updateBackBtn(); return; } go(function () { _renderView(name); }); }
+  function goHome() { VIEWS = [function () { _renderView("home"); }]; try { history.replaceState({ v: 1 }, ""); } catch (e) { } currentView = "home"; _renderView("home"); window.scrollTo(0, 0); updateBackBtn(); }
+  function _renderView(name) {
     currentView = name; window.scrollTo(0, 0);
     if (name === "home") renderHome();
     else if (name === "zhenti") renderZhentiList();
@@ -2832,12 +2844,13 @@
     else if (name === "yati") renderYatiList();
     else if (name === "report") renderReport();
   }
-  document.getElementById("btn-home").onclick = function () { openView("home"); };
+  document.getElementById("btn-home").onclick = function () { goHome(); };
   document.getElementById("btn-settings").onclick = openSettings;
+  var _back = document.getElementById("btn-back"); if (_back) _back.onclick = function () { goBack(); };
   var _dash = document.getElementById("btn-dash"); if (_dash) _dash.onclick = function () { openView("dash"); };
   var _theme = document.getElementById("btn-theme"); if (_theme) _theme.onclick = toggleTheme;
   applyTheme();
-  openView("home");
+  goHome();
   showWelcome();
   syncOnLoad();
 })();

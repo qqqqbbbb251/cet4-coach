@@ -54,6 +54,7 @@ html = """<!DOCTYPE html>
 <body>
 <header id="appbar">
   <div class="bar-inner">
+    <button id="btn-back" class="icon-btn" aria-label="返回" title="返回" style="display:none">&#8249;</button>
     <button id="btn-home" class="brand">四级备考 · CET-4</button>
     <div class="bar-actions">
       <button id="btn-dash" class="icon-btn" aria-label="仪表盘" title="学习仪表盘">&#128202;</button>
