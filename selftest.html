@@ -24,22 +24,22 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=12"></script>
-<script src="data/zhenti.js?v=12"></script>
-<script src="data/zaudio.js?v=12"></script>
-<script src="data/wordmeta.js?v=12"></script>
-<script src="data/roots.js?v=12"></script>
-<script src="data/eztor.js?v=12"></script>
-<script src="data/papers.js?v=12"></script>
-<script src="data/words_extra.js?v=12"></script>
-<script src="data/vocabtest.js?v=12"></script>
-<script src="data/wordcolloc.js?v=12"></script>
-<script src="data/voa.js?v=12"></script>
-<script src="data/dict.js?v=12"></script>
-<script src="data/grammar.js?v=12"></script>
-<script src="data/wordform.js?v=12"></script>
-<script src="data/waudio.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="data/data.js?v=13"></script>
+<script src="data/zhenti.js?v=13"></script>
+<script src="data/zaudio.js?v=13"></script>
+<script src="data/wordmeta.js?v=13"></script>
+<script src="data/roots.js?v=13"></script>
+<script src="data/eztor.js?v=13"></script>
+<script src="data/papers.js?v=13"></script>
+<script src="data/words_extra.js?v=13"></script>
+<script src="data/vocabtest.js?v=13"></script>
+<script src="data/wordcolloc.js?v=13"></script>
+<script src="data/voa.js?v=13"></script>
+<script src="data/dict.js?v=13"></script>
+<script src="data/grammar.js?v=13"></script>
+<script src="data/wordform.js?v=13"></script>
+<script src="data/waudio.js?v=13"></script>
+<script src="app.js?v=13"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -177,7 +177,24 @@
         ok("dictation check renders result", !!q('#main [data-dres]') && q('#main [data-dres]').textContent.length > 0);
       }
     } catch (e) { ok("listening dictation flow", false, String(e)); }
-    testAI();
+    testPlan();
+  }
+
+  function testPlan() {
+    try {
+      q("#btn-home").click();
+      q('#main [data-cat="me"]').click();
+      q('#main [data-go="plan"]').click();
+      ok("plan shows profile form", !!q("#pf-save"));
+      q("#pf-save").click();
+      ok("plan shows daily questionnaire", !!q("#q-go"));
+      q("#q-go").click();
+      setTimeout(function () {
+        ok("plan renders tasks", qa('#main [data-task]').length > 0, "tasks=" + qa('#main [data-task]').length);
+        ok("plan persisted to cet4_daily", !!localStorage.getItem("cet4_daily"));
+        testAI();
+      }, 900);
+    } catch (e) { ok("plan flow", false, String(e)); testAI(); }
   }
 
   function testAI() {
