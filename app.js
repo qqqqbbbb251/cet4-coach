@@ -213,9 +213,7 @@
     if (!c.url) return Promise.reject(new Error("未配置同步地址"));
     return pullSync().then(function (rows) {
       if (!rows || !rows.length) throw new Error("云端暂无数据");
-      var row = null, i;
-      for (i = 0; i < rows.length; i++) { if (rows[i].id === c.name || rows[i].name === c.name) row = rows[i]; }
-      if (!row) row = rows[rows.length - 1];
+      var row = findRow(rows, c.name);
       var backup = row.data && row.data.backup;
       if (!backup) throw new Error("云端备份是旧格式（只有统计，没有完整数据）。请让本机先「保存并立即同步」一次。");
       return restoreAll(backup);
@@ -224,7 +222,38 @@
   var _lastAutoSync = 0;
   var _lastBak = 0;
   function autoBackup() { var n = Date.now(); if (n - _lastBak < 60000) return; _lastBak = n; try { localStorage.setItem("cet4_backup", JSON.stringify({ ts: n, data: snapshotAll() })); } catch (e) { } }
-  function autoSync() { autoBackup(); var c = syncCfg(); if (!c.url) return; var n = Date.now(); if (n - _lastAutoSync < 120000) return; _lastAutoSync = n; pushSync().catch(function () { }); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  function hasLocalData() {
+    var p = store("cet4_progress", { a: 0, c: 0 });
+    var v = getVocabLog();
+    if ((p && p.a > 0) || (v && v.total > 0)) return true;
+    if (Object.keys(store("cet4_wrong", {})).length) return true;
+    if (Object.keys(store("cet4_fav", {})).length) return true;
+    if (Object.keys(store("cet4_srs", {})).length) return true;
+    if (Object.keys(store("cet4_qfav", {})).length) return true;
+    if (Object.keys(store("cet4_plan", {})).length) return true;
+    if ((store("cet4_records", []) || []).length) return true;
+    if ((examList() || []).length) return true;
+    return false;
+  }
+  function findRow(rows, name) { if (!rows || !rows.length) return null; for (var i = 0; i < rows.length; i++) { if (rows[i].id === name || rows[i].name === name) return rows[i]; } return rows[rows.length - 1]; }
+  function autoSync() { autoBackup(); var c = syncCfg(); if (!c.url) return; if (!hasLocalData()) return; var n = Date.now(); if (n - _lastAutoSync < 120000) return; _lastAutoSync = n; pushSync().catch(function () { }); }
+  function syncOnLoad() {
+    var c = syncCfg();
+    if (!c.url) { autoBackup(); return; }
+    if (hasLocalData()) { autoSync(); return; }
+    try { if (sessionStorage.getItem("cet4_restore_done")) return; } catch (e) { }
+    pullSync().then(function (rows) {
+      var row = findRow(rows, c.name);
+      if (row && row.data && row.data.backup) {
+        var n = restoreAll(row.data.backup);
+        if (n > 0) {
+          try { sessionStorage.setItem("cet4_restore_done", "1"); } catch (e) { }
+          toast("已从云端恢复数据");
+          setTimeout(function () { location.reload(); }, 900);
+        }
+      }
+    }).catch(function () { });
+  }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -2718,6 +2747,6 @@
   applyTheme();
   openView("home");
   showWelcome();
-  autoSync();
+  syncOnLoad();
 })();
 
