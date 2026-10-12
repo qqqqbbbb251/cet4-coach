@@ -28,6 +28,7 @@ voa = read(os.path.join("data", "voa.js"))
 dic = read(os.path.join("data", "dict.js"))
 gram = read(os.path.join("data", "grammar.js"))
 wform = read(os.path.join("data", "wordform.js"))
+guide = read(os.path.join("data", "guide.js"))
 
 audiodir = os.path.join(web, "assets", "audio")
 replaced = 0
@@ -103,6 +104,9 @@ html = """<!DOCTYPE html>
 </script>
 <script>
 """ + wform + """
+</script>
+<script>
+""" + guide + """
 </script>
 <script>
 """ + app + """

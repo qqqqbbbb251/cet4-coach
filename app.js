@@ -118,6 +118,13 @@
 
   /* ---------- 词书 / 词频 / 难度 ---------- */
   function wmeta(w) { return (window.CET4_WORDMETA || {})[w] || { f5: 0, f10: 0, d: "" }; }
+  function isSimpleWord(w, meta) {
+    meta = meta || (window.CET4_WORDMETA || {});
+    var m = meta[w] || {}, lv = m.lv || [];
+    if (lv.indexOf("zk") >= 0) return true;
+    if (lv.length === 0 && (m.r || 999999) <= 2500) return true;
+    return false;
+  }
   function bookWords(key) {
     var meta = window.CET4_WORDMETA || {};
     var ex = window.CET4_EXTRA || {};
@@ -127,7 +134,7 @@
     if (key === "f10") return DATA.words.filter(function (w) { return (meta[w.w] || {}).f10 >= 15; });
     if (["基础", "中级", "较难", "高阶"].indexOf(key) >= 0) return DATA.words.filter(function (w) { return (meta[w.w] || {}).d === key; });
     var ws = DATA.words.slice();
-    if (store("cet4_nosimple", false)) ws = ws.filter(function (w) { return (((meta[w.w] || {}).lv) || []).indexOf("zk") < 0; });
+    if (store("cet4_nosimple", true)) ws = ws.filter(function (w) { return !isSimpleWord(w.w, meta); });
     return ws;
   }
   function getVocabLog() { return store("cet4_vocab", { days: {}, learned: {}, total: 0 }); }
@@ -401,7 +408,7 @@
     { k: "skill", t: "专项练习", d: "听力 · VOA · 阅读 · 翻译 · 写作 · 错词本 · 搭配本 · 语法 · 短语", ic: "练", c: "#00897B", mods: ["listening", "voa", "reading", "translation", "writing", "writinglib", "errbook", "collocbook", "grammar", "collocations"] },
     { k: "ai", t: "AI 批改", d: "拍照识别批改 · 作文/翻译评分", ic: "AI", c: "#D81B60", mods: ["ocr"] },
     { k: "me", t: "我的学习", d: "计划 · 报告 · 打卡 · 错题本 · 收藏", ic: "我", c: "#C62828", mods: ["plan", "report", "dash", "records", "wrong", "qfav", "monitor"] },
-    { k: "more", t: "更多", d: "GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["links"] }
+    { k: "more", t: "更多", d: "使用指南 · GitHub 开源英语学习资源", ic: "…", c: "#455A64", mods: ["guide", "links"] }
   ];
   var MODS = {
     vocab: { t: "单词检测", d: "单词卡 · 中译英 · 拼写 · 词书 · 重点词 · 生词本", ic: "Aa", c: "#3949AB" },
@@ -432,13 +439,15 @@
     records: { t: "作文/翻译记录", d: "历史提交与批改 · 可合成为考试", ic: "档", c: "#8E24AA" },
     wrong: { t: "错题本", d: "自动收集 · 智能复习", ic: "错", c: "#C62828" },
     qfav: { t: "收藏题目", d: "收藏的真题题目", ic: "☆", c: "#6A1B9A" },
-    links: { t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" }
+    links: { t: "更多资料", d: "GitHub 开源英语学习资源合集", ic: "链", c: "#455A64" },
+    guide: { t: "使用指南", d: "3 分钟上手 · 各模块说明 · 常见问题", ic: "📖", c: "#546E7A" }
   };
   function renderHome() {
     var ok = configured();
     var html = '<div class="page">' +
       '<div class="hero"><h1>大学英语四级 · 备考</h1><p>单词 · 真题模考 · 专项练习 · AI 批改，一站式备考。</p><span class="pill">' + (ok ? "● AI 批改已就绪" : "○ AI 批改未配置") + "</span></div>";
     if (!ok) html += '<div class="info warn">点右上角 ⚙ 填入 DeepSeek API Key，即可用作文/翻译批改、拍照识别与 AI 计划；其余功能可离线使用。</div>';
+    html += '<div class="center" style="margin:2px 0 14px"><button class="btn ghost" id="home-guide">📖 使用指南 · 快速上手</button></div>';
     html += '<div class="grid">';
     CATS.forEach(function (c) {
       html += '<div class="fcard" data-cat="' + c.k + '"><div class="ic" style="background:' + c.c + '1f;color:' + c.c + '">' + c.ic + '</div><div class="txt"><h3>' + c.t + '</h3><p>' + c.d + '</p></div><div class="arrow">›</div></div>';
@@ -446,6 +455,7 @@
     html += '</div><p class="center muted" style="margin-top:24px">个人专属备考工具 · 数据来源：GitHub 开源</p></div>';
     main.innerHTML = html;
     main.querySelectorAll("[data-cat]").forEach(function (el) { el.onclick = function () { renderCategory(el.getAttribute("data-cat")); }; });
+    var hg = document.getElementById("home-guide"); if (hg) hg.onclick = function () { openView("guide"); };
   }
   function renderCategory(k) { go(function () { _renderCategory(k); }); }
   function _renderCategory(k) {
@@ -505,7 +515,10 @@
 
   /* ---------- vocab ---------- */
   function renderVocab() {
-    main.innerHTML = '<div class="page"><div class="tabs">' +
+    main.innerHTML = '<div class="page">' +
+      '<label class="info" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px"><input type="checkbox" id="vt-nosimple2" ' + (store("cet4_nosimple", true) ? "checked" : "") + ' style="width:18px;height:18px"> 去除简单词（中考及以内，推荐）' +
+      '<span class="muted" style="margin-left:auto">四级词书剩 ' + bookWords("cet4").length + ' 词</span></label>' +
+      '<div class="tabs">' +
       '<button id="tab-study" class="active">背单词</button>' +
       '<button id="tab-quiz">词义测验</button>' +
       '<button id="tab-en">中译英</button>' +
@@ -513,6 +526,7 @@
       '<button id="tab-book">词书</button>' +
       '<button id="tab-vip">重点词</button></div><div id="vocab-body"></div></div>';
     var body = document.getElementById("vocab-body");
+    document.getElementById("vt-nosimple2").onchange = function () { saveStore("cet4_nosimple", this.checked); renderVocab(); };
     document.getElementById("tab-study").onclick = function () { setTab(this); renderStudy(body); };
     document.getElementById("tab-quiz").onclick = function () { setTab(this); renderQuiz(body); };
     document.getElementById("tab-en").onclick = function () { setTab(this); renderEnQuiz(body); };
@@ -1423,17 +1437,19 @@
     var mask = document.createElement("div");
     mask.className = "modal-mask";
     mask.innerHTML = '<div class="modal"><h2>欢迎使用四级备考</h2>' +
-      '<p>一站式四级备考工具，包含：</p>' +
+      '<p>三步上手：</p>' +
       '<ul style="padding-left:20px;line-height:1.9">' +
-      '<li><b>历年真题</b>：76 套（2015–2026），含答案解析，在线作答自动判分</li>' +
-      '<li><b>单词检测</b>：近5年/近10年频率分级 + 难度分级 + 词书</li>' +
-      '<li><b>听力 / 阅读 / 翻译 / 写作 / 词根词缀</b></li>' +
-      '<li><b>拍照批改 · 错题本 · 生词本 · 收藏题目 · 学习仪表盘</b></li>' +
+      '<li>① ⚙ 设置里填 <b>DeepSeek API Key</b>（用 AI 批改 / AI 计划）</li>' +
+      '<li>② 设置里配 <b>云同步</b>（自动备份，换机 / 清缓存可恢复）</li>' +
+      '<li>③ 每天先到「学习计划」填问卷，生成今日计划</li>' +
       '</ul>' +
-      '<div class="info">首次使用请点右上角 ⚙ 填入 DeepSeek API Key，即可使用作文/翻译 AI 批改与拍照识别；其余功能可离线使用。</div>' +
-      '<button class="btn block" id="wel-ok">开始使用</button></div>';
+      '<div class="info">其余功能（背单词 / 真题 / 听力 / 阅读 / 语法…）可直接离线使用。</div>' +
+      '<button class="btn block" id="wel-guide">📖 查看完整使用指南</button>' +
+      '<button class="btn ghost block" id="wel-ok" style="margin-top:8px">开始使用</button></div>';
     document.body.appendChild(mask);
-    document.getElementById("wel-ok").onclick = function () { saveStore("cet4_seen", true); document.body.removeChild(mask); };
+    function closeWel() { saveStore("cet4_seen", true); if (mask.parentNode) document.body.removeChild(mask); }
+    document.getElementById("wel-ok").onclick = closeWel;
+    document.getElementById("wel-guide").onclick = function () { closeWel(); openView("guide"); };
   }
 
   /* ---------- 原创模拟卷 ---------- */
@@ -1447,6 +1463,26 @@
   }
 
   /* ---------- 更多资料 ---------- */
+  function renderGuide() {
+    var G = window.CET4_GUIDE || {};
+    var html = '<div class="page"><div class="section-title">使用指南</div>' +
+      '<div class="info">' + esc(G.intro || "") + "</div>" +
+      '<div class="section-title">快速上手</div>';
+    (G.quick || []).forEach(function (s) { html += '<div class="card"><b>' + esc(s.t) + '</b><div class="muted" style="margin-top:4px">' + esc(s.d) + "</div></div>"; });
+    (G.sections || []).forEach(function (sec) {
+      html += '<div class="section-title">' + esc(sec.h) + "</div>";
+      (sec.items || []).forEach(function (it) { html += '<div class="card"><b>' + esc(it.t) + '</b><div class="muted" style="margin-top:4px">' + esc(it.d) + "</div></div>"; });
+    });
+    if (G.faq && G.faq.length) {
+      html += '<div class="section-title">常见问题</div>';
+      G.faq.forEach(function (f) { html += '<details class="card" style="padding:12px 14px"><summary style="cursor:pointer"><b>' + esc(f.q) + '</b></summary><div class="muted" style="margin-top:6px">' + esc(f.a) + "</div></details>"; });
+    }
+    if (G.tips && G.tips.length) {
+      html += '<div class="section-title">小贴士</div><div class="card">' + G.tips.map(function (t) { return '<div style="padding:6px 0;border-bottom:1px solid var(--line)">· ' + esc(t) + "</div>"; }).join("") + "</div>";
+    }
+    html += "</div>";
+    main.innerHTML = html;
+  }
   function renderLinks() {
     var groups = [
       { t: "题库 · 真题", items: [
@@ -1924,7 +1960,7 @@
   /* ---------- 背单词（百词斩式） ---------- */
   function renderVocabBook(body) {
     var cur = store("cet4_book", "cet4");
-    var nosimple = store("cet4_nosimple", false);
+    var nosimple = store("cet4_nosimple", true);
     var books = [
       { k: "cet4", t: "四级核心词汇", d: "全部 4537 词 · 推荐" },
       { k: "f5", t: "四级 · 近5年真题高频", d: "近5年出现 ≥ 8 次" },
@@ -1940,13 +1976,12 @@
       { k: "toefl", t: "托福核心", d: "" },
       { k: "fav", t: "我的生词本", d: "收藏的单词" }
     ];
-    body.innerHTML = '<label class="info" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="vt-nosimple" ' + (nosimple ? "checked" : "") + ' style="width:18px;height:18px"> 一键去除简单词（小学/初中词汇，仅对四级词书生效）</label>' +
+    body.innerHTML = (nosimple ? '<div class="info">已去除简单词（中考及以内）· 四级词书剩 ' + bookWords("cet4").length + ' 词。如需包含，去「背单词」顶部取消勾选。</div>' : '<div class="info">当前包含简单词。可在「背单词」顶部勾选「去除简单词」。</div>') +
       books.map(function (b) {
         return '<div class="list-item" data-book="' + b.k + '"><div class="ic" style="background:#3949AB1f;color:#3949AB">' + esc(b.t.charAt(0)) + "</div>" +
           "<div><h3>" + esc(b.t) + (b.k === cur ? " ✓" : "") + "</h3><p>" + bookWords(b.k).length + " 词" + (b.d ? " · " + b.d : "") + "</p></div>" +
           '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
       }).join("");
-    document.getElementById("vt-nosimple").onchange = function () { saveStore("cet4_nosimple", this.checked); renderVocabBook(body); };
     body.querySelectorAll("[data-book]").forEach(function (el) {
       el.onclick = function () { saveStore("cet4_book", el.getAttribute("data-book")); toast("已选择词书，开始背吧"); document.getElementById("tab-study").click(); };
     });
@@ -2363,7 +2398,9 @@
       if (!c.url) { toast("请先在设置里配置云同步地址"); return; }
       var res = document.getElementById("mon-res"); res.innerHTML = '<div class="muted">读取中…</div>';
       pullSync().then(function (rows) {
-        if (!rows || !rows.length) { res.innerHTML = '<div class="info">云端暂无数据（她还需要在设置里配置同步并点“立即同步”）。</div>'; return; }
+        rows = (rows || []).filter(function (r) { var d = r.data || {}; return !!d.backup || d.total != null || (d.vocab && d.vocab.total) || (d.exams && d.exams.length); });
+        rows.sort(function (a, b) { return String((b.data || {}).updated || "").localeCompare(String((a.data || {}).updated || "")); });
+        if (!rows.length) { res.innerHTML = '<div class="info">云端暂无有效数据（她还需要在设置里配置同步并点「保存并立即同步」）。</div>'; return; }
         var h = "";
         rows.forEach(function (row) {
           var s = row.data || {};
@@ -2768,8 +2805,9 @@
       '<button class="btn outline" id="set-test" style="flex:1">测试连接</button></div>' +
       '<div id="set-msg"></div>' +
       '<button class="btn outline block" id="set-data" style="margin-top:12px">数据导入 / 导出</button>' +
+      '<button class="btn outline block" id="set-guide" style="margin-top:8px">📖 使用指南</button>' +
       '<div class="section-title" style="margin-top:14px">云同步（可选 · 用于远程监督）</div>' +
-      '<div class="info">配置后本机<b>全部学习数据</b>（背单词记录、做题进度、错题、生词、计划、作文/翻译记录等）会完整备份到你的 Supabase。地址＝Project URL，Key＝anon key，同步码＝她的名字。学习完会自动备份；换设备或误清数据时，点下方「从云端恢复」即可找回。</div>' +
+      '<div class="info">配置后本机<b>全部学习数据</b>（背单词记录、做题进度、错题、生词、计划、作文/翻译记录等）会完整备份到你的 Supabase。地址＝Project URL，Key＝anon key，同步码＝她的名字。<b>不同设备必须用不同的同步码</b>（她一个、你一个），否则会互相覆盖。学习完会自动备份；换设备或误清数据时，点下方「从云端恢复」即可找回。</div>' +
       '<label class="fld"><span>同步地址（Supabase Project URL）</span><input type="text" id="set-syncurl" value="' + esc(store("cet4_syncurl", "")) + '"></label>' +
       '<label class="fld"><span>Key（anon）</span><input type="text" id="set-synckey" value="' + esc(store("cet4_synckey", "")) + '"></label>' +
       '<label class="fld"><span>同步码 / 姓名</span><input type="text" id="set-syncname" value="' + esc(store("cet4_syncname", "学生")) + '"></label>' +
@@ -2786,6 +2824,7 @@
     };
     document.getElementById("set-msg").innerHTML = "";
     document.getElementById("set-data").onclick = openDataIO;
+    var _sg = document.getElementById("set-guide"); if (_sg) _sg.onclick = function () { close(); openView("guide"); };
     document.getElementById("set-restore").onclick = function () {
       if (!window.confirm("确定用云端备份覆盖本机数据吗？本机现有的学习数据会被云端版本替换。")) return;
       var msg = document.getElementById("set-msg"); msg.innerHTML = '<div class="info">恢复中…</div>';
@@ -2848,6 +2887,7 @@
     else if (name === "monitor") renderMonitor();
     else if (name === "eztor") renderEztorList();
     else if (name === "links") renderLinks();
+    else if (name === "guide") renderGuide();
     else if (name === "yati") renderYatiList();
     else if (name === "report") renderReport();
   }

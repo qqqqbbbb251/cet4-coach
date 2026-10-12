@@ -25,22 +25,23 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=15"></script>
-<script src="data/zhenti.js?v=15"></script>
-<script src="data/zaudio.js?v=15"></script>
-<script src="data/wordmeta.js?v=15"></script>
-<script src="data/roots.js?v=15"></script>
-<script src="data/eztor.js?v=15"></script>
-<script src="data/papers.js?v=15"></script>
-<script src="data/words_extra.js?v=15"></script>
-<script src="data/vocabtest.js?v=15"></script>
-<script src="data/wordcolloc.js?v=15"></script>
-<script src="data/voa.js?v=15"></script>
-<script src="data/dict.js?v=15"></script>
-<script src="data/grammar.js?v=15"></script>
-<script src="data/wordform.js?v=15"></script>
-<script src="data/waudio.js?v=15"></script>
-<script src="app.js?v=15"></script>
+<script src="data/data.js?v=16"></script>
+<script src="data/zhenti.js?v=16"></script>
+<script src="data/zaudio.js?v=16"></script>
+<script src="data/wordmeta.js?v=16"></script>
+<script src="data/roots.js?v=16"></script>
+<script src="data/eztor.js?v=16"></script>
+<script src="data/papers.js?v=16"></script>
+<script src="data/words_extra.js?v=16"></script>
+<script src="data/vocabtest.js?v=16"></script>
+<script src="data/wordcolloc.js?v=16"></script>
+<script src="data/voa.js?v=16"></script>
+<script src="data/dict.js?v=16"></script>
+<script src="data/grammar.js?v=16"></script>
+<script src="data/guide.js?v=16"></script>
+<script src="data/wordform.js?v=16"></script>
+<script src="data/waudio.js?v=16"></script>
+<script src="app.js?v=16"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -93,6 +94,9 @@
   q("#btn-home").click();
   q('#main [data-cat="words"]').click();
   ok("back button appears after navigating", !!q("#btn-back") && q("#btn-back").style.display !== "none");
+  q("#btn-home").click();
+  q("#home-guide").click();
+  ok("guide page renders", /快速上手/.test(document.getElementById("main").textContent) && qa("#main .card").length > 5);
 
   var cats = ["words", "exam", "skill", "ai", "me", "more"];
   cats.forEach(function (c) {
