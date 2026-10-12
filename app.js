@@ -222,7 +222,9 @@
     });
   }
   var _lastAutoSync = 0;
-  function autoSync() { var c = syncCfg(); if (!c.url) return; var n = Date.now(); if (n - _lastAutoSync < 120000) return; _lastAutoSync = n; pushSync().catch(function () { }); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
+  var _lastBak = 0;
+  function autoBackup() { var n = Date.now(); if (n - _lastBak < 60000) return; _lastBak = n; try { localStorage.setItem("cet4_backup", JSON.stringify({ ts: n, data: snapshotAll() })); } catch (e) { } }
+  function autoSync() { autoBackup(); var c = syncCfg(); if (!c.url) return; var n = Date.now(); if (n - _lastAutoSync < 120000) return; _lastAutoSync = n; pushSync().catch(function () { }); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
 
   /* ---------- settings ---------- */
   var DEFAULTS = { apiKey: "", baseUrl: "https://api.deepseek.com", model: "deepseek-flash" };
@@ -1751,6 +1753,8 @@
       '<div class="row" style="margin-top:10px"><button class="btn" id="io-exp" style="flex:1">导出全部数据</button>' +
       '<button class="btn outline" id="io-imp" style="flex:1">导入并恢复</button></div>' +
       '<div id="io-msg"></div>' +
+      '<div id="io-bakmsg" class="muted" style="margin-top:8px"></div>' +
+      '<button class="btn ghost block" id="io-bakrestore" style="margin-top:6px">从本机自动备份恢复</button>' +
       '<div class="row" style="margin-top:16px"><button class="btn ghost block" id="io-close">关闭</button></div></div>';
     document.body.appendChild(mask);
     var ta = document.getElementById("io-text");
@@ -1767,6 +1771,15 @@
         }
         document.getElementById("io-msg").innerHTML = '<div class="info">导入成功（' + (n ? ("完整恢复 " + n + " 项") : "合并记录") + '），刷新后生效。</div>';
       } catch (err) { document.getElementById("io-msg").innerHTML = '<div class="info warn">导入失败：' + esc(err.message) + "</div>"; }
+    };
+    var bak = store("cet4_backup", null);
+    document.getElementById("io-bakmsg").textContent = (bak && bak.data) ? ("本机自动备份：" + new Date(bak.ts).toLocaleString() + "（" + Object.keys(bak.data).length + " 项）") : "尚无本机自动备份";
+    document.getElementById("io-bakrestore").onclick = function () {
+      var b = store("cet4_backup", null);
+      if (!b || !b.data) { toast("没有可用的本机备份"); return; }
+      if (!window.confirm("确定用本机自动备份覆盖当前数据吗？")) return;
+      var n = restoreAll(b.data);
+      document.getElementById("io-msg").innerHTML = '<div class="info">已从本机自动备份恢复 ' + n + ' 项，刷新后生效。</div>';
     };
   }
 
