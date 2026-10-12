@@ -168,6 +168,26 @@
       wrongN: Object.keys(store("cet4_wrong", {})).length
     };
   }
+  var SYNC_SKIP = { cet4_settings: 1, cet4_synckey: 1 };
+  function snapshotAll() {
+    var out = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf("cet4_") !== 0 || SYNC_SKIP[k]) continue;
+      try { out[k] = JSON.parse(localStorage.getItem(k)); } catch (e) { }
+    }
+    return out;
+  }
+  function restoreAll(obj) {
+    if (!obj) return 0;
+    var n = 0;
+    Object.keys(obj).forEach(function (k) {
+      if (k.indexOf("cet4_") !== 0 || SYNC_SKIP[k]) return;
+      try { localStorage.setItem(k, JSON.stringify(obj[k])); n++; } catch (e) { }
+    });
+    return n;
+  }
+  function fullSnapshot() { var s = buildSnapshot(); s.backup = snapshotAll(); return s; }
   function syncCfg() { return { url: store("cet4_syncurl", ""), key: store("cet4_synckey", ""), name: store("cet4_syncname", "学生") }; }
   function pushSync() {
     var c = syncCfg();
@@ -176,7 +196,7 @@
     var headers = { "Content-Type": "application/json", "Accept": "application/json" };
     if (c.key) { headers["apikey"] = c.key; headers["Authorization"] = "Bearer " + c.key; }
     headers["Prefer"] = "resolution=merge-duplicates";
-    return fetch(base + "/rest/v1/sync", { method: "POST", headers: headers, body: JSON.stringify([{ id: c.name, data: buildSnapshot() }]) })
+    return fetch(base + "/rest/v1/sync", { method: "POST", headers: headers, body: JSON.stringify([{ id: c.name, data: fullSnapshot() }]) })
       .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("同步失败 " + r.status + " " + t.slice(0, 120)); }); return true; });
   }
   function pullSync() {
@@ -187,6 +207,19 @@
     if (c.key) { headers["apikey"] = c.key; headers["Authorization"] = "Bearer " + c.key; }
     return fetch(base + "/rest/v1/sync?select=*", { headers: headers })
       .then(function (r) { if (!r.ok) return r.text().then(function (t) { throw new Error("读取失败 " + r.status + " " + t.slice(0, 120)); }); return r.json(); });
+  }
+  function restoreSync() {
+    var c = syncCfg();
+    if (!c.url) return Promise.reject(new Error("未配置同步地址"));
+    return pullSync().then(function (rows) {
+      if (!rows || !rows.length) throw new Error("云端暂无数据");
+      var row = null, i;
+      for (i = 0; i < rows.length; i++) { if (rows[i].id === c.name || rows[i].name === c.name) row = rows[i]; }
+      if (!row) row = rows[rows.length - 1];
+      var backup = row.data && row.data.backup;
+      if (!backup) throw new Error("云端备份是旧格式（只有统计，没有完整数据）。请让本机先「保存并立即同步」一次。");
+      return restoreAll(backup);
+    });
   }
   var _lastAutoSync = 0;
   function autoSync() { var c = syncCfg(); if (!c.url) return; var n = Date.now(); if (n - _lastAutoSync < 120000) return; _lastAutoSync = n; pushSync().catch(function () { }); }  var LISTEN_LABEL = { news: "新闻", conversation: "对话", passage: "短文" };
@@ -1713,22 +1746,26 @@
     var mask = document.createElement("div");
     mask.className = "modal-mask";
     mask.innerHTML = '<div class="modal"><h2>数据导入 / 导出</h2>' +
-      '<div class="info">导出：点「导出」生成 JSON，复制备份。导入：把 JSON 粘贴进文本框，点「导入并合并」（作文/翻译记录与考试成绩会追加，不影响其它数据）。</div>' +
+      '<div class="info">「导出全部数据」生成完整 JSON（背单词记录、进度、错题、生词、计划、作文/翻译记录…），请复制收藏好。换设备或数据丢失时，把 JSON 粘回来点「导入并恢复」即可。</div>' +
       '<textarea id="io-text" rows="10" style="font-family:monospace;font-size:12px" placeholder="在此粘贴要导入的 JSON…"></textarea>' +
-      '<div class="row" style="margin-top:10px"><button class="btn" id="io-exp" style="flex:1">导出当前</button>' +
-      '<button class="btn outline" id="io-imp" style="flex:1">导入并合并</button></div>' +
+      '<div class="row" style="margin-top:10px"><button class="btn" id="io-exp" style="flex:1">导出全部数据</button>' +
+      '<button class="btn outline" id="io-imp" style="flex:1">导入并恢复</button></div>' +
       '<div id="io-msg"></div>' +
       '<div class="row" style="margin-top:16px"><button class="btn ghost block" id="io-close">关闭</button></div></div>';
     document.body.appendChild(mask);
     var ta = document.getElementById("io-text");
     document.getElementById("io-close").onclick = function () { document.body.removeChild(mask); };
-    document.getElementById("io-exp").onclick = function () { ta.value = JSON.stringify({ records: getRecords(), exams: examList() }, null, 1); ta.select(); };
+    document.getElementById("io-exp").onclick = function () { ta.value = JSON.stringify({ app: "cet4-coach", version: 1, exportedAt: new Date().toISOString(), backup: snapshotAll() }); ta.select(); };
     document.getElementById("io-imp").onclick = function () {
       try {
         var obj = JSON.parse(ta.value);
-        if (obj.records) { var l = getRecords(); obj.records.forEach(function (r) { if (!l.some(function (x) { return String(x.id) === String(r.id); })) l.push(r); }); saveStore("cet4_records", l); }
-        if (obj.exams) { obj.exams.forEach(function (x) { addExam(x); }); }
-        document.getElementById("io-msg").innerHTML = '<div class="info">导入成功：作文/翻译记录 ' + getRecords().length + " 条，考试 " + examList().length + " 条。</div>";
+        var n = 0;
+        if (obj.backup) { n = restoreAll(obj.backup); }
+        else {
+          if (obj.records) { var l = getRecords(); obj.records.forEach(function (r) { if (!l.some(function (x) { return String(x.id) === String(r.id); })) l.push(r); }); saveStore("cet4_records", l); }
+          if (obj.exams) { obj.exams.forEach(function (x) { addExam(x); }); }
+        }
+        document.getElementById("io-msg").innerHTML = '<div class="info">导入成功（' + (n ? ("完整恢复 " + n + " 项") : "合并记录") + '），刷新后生效。</div>';
       } catch (err) { document.getElementById("io-msg").innerHTML = '<div class="info warn">导入失败：' + esc(err.message) + "</div>"; }
     };
   }
@@ -2015,20 +2052,31 @@
     return picked;
   }
   function renderStudy(body, preset) {
-    var all = (preset && preset.length) ? preset : bookWords(store("cet4_book", "cet4"));
+    var bk = store("cet4_book", "cet4");
+    var all = (preset && preset.length) ? preset : bookWords(bk);
     if (!all || !all.length) { body.innerHTML = '<div class="info">当前词书为空，请到「词书」选择。</div>'; return; }
-    var G = 5, K = Math.min(4, Math.ceil(all.length / G));
-    var pool = shuffle(all.slice());
-    var groups = []; for (var i = 0; i < K; i++) groups.push(pool.slice(i * G, (i + 1) * G));
-    var spell = store("cet4_spellmode", false);
-    var pass = {}; groups.forEach(function (g) { g.forEach(function (w) { pass[w.w] = { a: false, b: false, s: !spell }; }); });
+    var G = 5, K, pool, groups, spell, pass, si, resumed = false;
+    var sess = store("cet4_study_session", null);
+    if (sess && !preset && sess.book === bk && sess.groups && sess.groups.length && (Date.now() - (sess.ts || 0) < 7 * 864e5)) {
+      groups = sess.groups; pass = sess.pass || {}; si = sess.si || 0; spell = !!sess.spell; K = groups.length; resumed = true;
+    } else {
+      K = Math.min(4, Math.ceil(all.length / G));
+      pool = shuffle(all.slice());
+      groups = []; for (var i = 0; i < K; i++) groups.push(pool.slice(i * G, (i + 1) * G));
+      spell = store("cet4_spellmode", false);
+      pass = {}; groups.forEach(function (g) { g.forEach(function (w) { pass[w.w] = { a: false, b: false, s: !spell }; }); });
+      si = 0;
+    }
     var sched = [];
-    for (var i = 0; i < K; i++) { sched.push({ g: i, t: "learn" }); if (i > 0) sched.push({ g: i - 1, t: "zh2en" }); sched.push({ g: i, t: "en2zh" }); }
+    for (var i2 = 0; i2 < K; i2++) { sched.push({ g: i2, t: "learn" }); if (i2 > 0) sched.push({ g: i2 - 1, t: "zh2en" }); sched.push({ g: i2, t: "en2zh" }); }
     if (K) sched.push({ g: K - 1, t: "zh2en" });
-    if (spell) for (var i = 0; i < K; i++) sched.push({ g: i, t: "spell" });
-    var si = 0;
-    var head = '<label class="muted" style="cursor:pointer;display:block;margin-bottom:6px"><input type="checkbox" id="st-spell" ' + (spell ? "checked" : "") + "> 边背边拼写（加一轮拼写考察）</label>";
-    function step() { if (si >= sched.length) { summary(); return; } var t = sched[si]; if (t.t === "learn") learn(t.g); else if (t.t === "en2zh") quiz(t.g, "en2zh"); else if (t.t === "zh2en") quiz(t.g, "zh2en"); else spellBatch(t.g); }
+    if (spell) for (var i3 = 0; i3 < K; i3++) sched.push({ g: i3, t: "spell" });
+    function persist() { try { saveStore("cet4_study_session", { book: bk, groups: groups, pass: pass, si: si, spell: spell, ts: Date.now() }); } catch (e) { } }
+    function clearSession() { try { localStorage.removeItem("cet4_study_session"); } catch (e) { } }
+    body.onclick = function (e) { var t = e.target; if (t && t.id === "st-restart") { clearSession(); renderStudy(body); } };
+    var head = '<label class="muted" style="cursor:pointer;display:block;margin-bottom:6px"><input type="checkbox" id="st-spell" ' + (spell ? "checked" : "") + "> 边背边拼写（加一轮拼写考察）</label>" +
+      (resumed ? '<div class="info">已恢复上次进度（第 ' + (si + 1) + " / " + sched.length + ' 步）· 刷新或退出也不会丢。<button class="btn ghost small" id="st-restart" style="margin-left:6px">重新开始</button></div>' : "");
+    function step() { persist(); if (si >= sched.length) { summary(); return; } var t = sched[si]; if (t.t === "learn") learn(t.g); else if (t.t === "en2zh") quiz(t.g, "en2zh"); else if (t.t === "zh2en") quiz(t.g, "zh2en"); else spellBatch(t.g); }
     function learn(g) {
       var words = groups[g], h = head + '<div class="between"><span class="muted">背新词 · 第' + (g + 1) + ' 组</span></div>' +
         '<div class="info">先记住这 ' + words.length + " 个词（含发音、固定搭配），随后以英译汉/汉译英等形式考察。</div>";
@@ -2085,6 +2133,7 @@
       };
     }
     function summary() {
+      clearSession();
       var allw = [].concat.apply([], groups);
       var mastered = allw.filter(function (w) { var p = pass[w.w]; return p.a && p.b && p.s; });
       var need = allw.filter(function (w) { var p = pass[w.w]; return !(p.a && p.b && p.s); });
@@ -2569,11 +2618,12 @@
       '<div id="set-msg"></div>' +
       '<button class="btn outline block" id="set-data" style="margin-top:12px">数据导入 / 导出</button>' +
       '<div class="section-title" style="margin-top:14px">云同步（可选 · 用于远程监督）</div>' +
-      '<div class="info">配置后本机数据会上传到你的 Supabase，方便远程查看。地址＝Project URL，Key＝anon key，同步码＝她的名字（见下方说明）。开启后**学习完会自动同步**。</div>' +
+      '<div class="info">配置后本机<b>全部学习数据</b>（背单词记录、做题进度、错题、生词、计划、作文/翻译记录等）会完整备份到你的 Supabase。地址＝Project URL，Key＝anon key，同步码＝她的名字。学习完会自动备份；换设备或误清数据时，点下方「从云端恢复」即可找回。</div>' +
       '<label class="fld"><span>同步地址（Supabase Project URL）</span><input type="text" id="set-syncurl" value="' + esc(store("cet4_syncurl", "")) + '"></label>' +
       '<label class="fld"><span>Key（anon）</span><input type="text" id="set-synckey" value="' + esc(store("cet4_synckey", "")) + '"></label>' +
       '<label class="fld"><span>同步码 / 姓名</span><input type="text" id="set-syncname" value="' + esc(store("cet4_syncname", "学生")) + '"></label>' +
       '<div class="row"><button class="btn" id="set-syncsave" style="flex:1">保存并立即同步</button><button class="btn outline" id="set-dash2" style="flex:1">监督看板</button></div>' +
+      '<button class="btn outline block" id="set-restore" style="margin-top:8px">从云端恢复数据（覆盖本机）</button>' +
       '<div class="row" style="margin-top:16px"><button class="btn ghost block" id="set-close">关闭</button></div></div>';
     document.body.appendChild(mask);
     function close() { document.body.removeChild(mask); }
@@ -2585,6 +2635,12 @@
     };
     document.getElementById("set-msg").innerHTML = "";
     document.getElementById("set-data").onclick = openDataIO;
+    document.getElementById("set-restore").onclick = function () {
+      if (!window.confirm("确定用云端备份覆盖本机数据吗？本机现有的学习数据会被云端版本替换。")) return;
+      var msg = document.getElementById("set-msg"); msg.innerHTML = '<div class="info">恢复中…</div>';
+      restoreSync().then(function (n) { msg.innerHTML = '<div class="info">已恢复 ' + n + ' 项数据，正在刷新…</div>'; setTimeout(function () { location.reload(); }, 900); })
+        .catch(function (e) { msg.innerHTML = '<div class="info warn">恢复失败：' + esc(e.message) + "</div>"; });
+    };
     document.getElementById("set-syncsave").onclick = function () {
       saveStore("cet4_syncurl", document.getElementById("set-syncurl").value.trim());
       saveStore("cet4_synckey", document.getElementById("set-synckey").value.trim());

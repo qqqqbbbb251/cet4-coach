@@ -24,22 +24,22 @@
   /* 跳过首屏引导，避免弹窗干扰测试 */
   try { localStorage.setItem("cet4_seen", "true"); } catch (e) { }
 </script>
-<script src="data/data.js?v=9"></script>
-<script src="data/zhenti.js?v=9"></script>
-<script src="data/zaudio.js?v=9"></script>
-<script src="data/wordmeta.js?v=9"></script>
-<script src="data/roots.js?v=9"></script>
-<script src="data/eztor.js?v=9"></script>
-<script src="data/papers.js?v=9"></script>
-<script src="data/words_extra.js?v=9"></script>
-<script src="data/vocabtest.js?v=9"></script>
-<script src="data/wordcolloc.js?v=9"></script>
-<script src="data/voa.js?v=9"></script>
-<script src="data/dict.js?v=9"></script>
-<script src="data/grammar.js?v=9"></script>
-<script src="data/wordform.js?v=9"></script>
-<script src="data/waudio.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="data/data.js?v=10"></script>
+<script src="data/zhenti.js?v=10"></script>
+<script src="data/zaudio.js?v=10"></script>
+<script src="data/wordmeta.js?v=10"></script>
+<script src="data/roots.js?v=10"></script>
+<script src="data/eztor.js?v=10"></script>
+<script src="data/papers.js?v=10"></script>
+<script src="data/words_extra.js?v=10"></script>
+<script src="data/vocabtest.js?v=10"></script>
+<script src="data/wordcolloc.js?v=10"></script>
+<script src="data/voa.js?v=10"></script>
+<script src="data/dict.js?v=10"></script>
+<script src="data/grammar.js?v=10"></script>
+<script src="data/wordform.js?v=10"></script>
+<script src="data/waudio.js?v=10"></script>
+<script src="app.js?v=10"></script>
 <script>
 (function () {
   var out = [], pass = 0, fail = 0;
@@ -82,6 +82,10 @@
   ok("offline dictionary loaded", !!window.CET4_DICT && Object.keys(window.CET4_DICT).length >= 8000, "entries=" + (window.CET4_DICT ? Object.keys(window.CET4_DICT).length : 0));
   ok("word-form data loaded", !!window.CET4_WORDFORM && Object.keys(window.CET4_WORDFORM).length >= 5000, "entries=" + (window.CET4_WORDFORM ? Object.keys(window.CET4_WORDFORM).length : 0));
   ok("word-audio map loaded", !!window.CET4_WAUDIO && Object.keys(window.CET4_WAUDIO).length >= 100, "entries=" + (window.CET4_WAUDIO ? Object.keys(window.CET4_WAUDIO).length : 0));
+  q("#btn-settings").click();
+  ok("settings has cloud-restore button", !!q("#set-restore"));
+  ok("settings has full data export", !!q("#set-data"));
+  q("#set-close").click();
 
   var cats = ["words", "exam", "skill", "ai", "me", "more"];
   cats.forEach(function (c) {
