@@ -13,7 +13,7 @@
   window.addEventListener("popstate", function () { if (VIEWS.length > 1) { VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } } updateBackBtn(); });
 
   /* ---------- 按需加载重资源（首屏只加载 data.js + wordmeta.js + app.js） ---------- */
-  var ASSET_V = "18";
+  var ASSET_V = "19";
   var NEED = {
     zhenti: ["data/zhenti.js", "data/zaudio.js"],
     eztor: ["data/eztor.js", "data/zhenti.js", "data/zaudio.js"],
