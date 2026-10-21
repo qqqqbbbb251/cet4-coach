@@ -13,7 +13,7 @@
   window.addEventListener("popstate", function () { if (VIEWS.length > 1) { VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } } updateBackBtn(); });
 
   /* ---------- 按需加载重资源（首屏只加载 data.js + wordmeta.js + app.js） ---------- */
-  var ASSET_V = "19";
+  var ASSET_V = "20";
   var NEED = {
     zhenti: ["data/zhenti.js", "data/zaudio.js"],
     eztor: ["data/eztor.js", "data/zhenti.js", "data/zaudio.js"],
@@ -1113,9 +1113,16 @@
     }
     if (showReading && reading.length) {
       html += '<div class="card section-card" data-ztype="reading"><h2>Part III-C　仔细阅读</h2>';
+      var lastPas = null, pasWarned = false;
       reading.forEach(function (q) {
-        var pas = (p.readingPassages || {})[String(q.qno)];
-        if (pas) html += '<div class="passage">' + esc(pas) + "</div>";
+        var pas = (p.readingPassages || {})[String(q.qno)] || "";
+        if (pas) {
+          if (pas !== lastPas) html += '<div class="passage">' + esc(pas) + "</div>";
+          lastPas = pas;
+        } else {
+          if (!pasWarned) { html += '<div class="info warn">（本套该篇阅读原文缺失，仅显示题目）</div>'; pasWarned = true; }
+          lastPas = null;
+        }
         html += mcq(q);
       });
       html += "</div>";
