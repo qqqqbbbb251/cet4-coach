@@ -1,4 +1,4 @@
-const CACHE = "cet4-v20";
+const CACHE = "cet4-v21";
 // 只预缓存首屏所需；其余 data/*.js、音频等按需加载后由 fetch 处理器自动缓存
 const CORE = [
   "./", "./index.html", "./style.css", "./app.js", "./manifest.json",

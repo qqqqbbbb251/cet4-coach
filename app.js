@@ -13,7 +13,7 @@
   window.addEventListener("popstate", function () { if (VIEWS.length > 1) { VIEWS.pop(); var fn = VIEWS[VIEWS.length - 1]; try { fn(); } catch (e) { } } updateBackBtn(); });
 
   /* ---------- 按需加载重资源（首屏只加载 data.js + wordmeta.js + app.js） ---------- */
-  var ASSET_V = "20";
+  var ASSET_V = "21";
   var NEED = {
     zhenti: ["data/zhenti.js", "data/zaudio.js"],
     eztor: ["data/eztor.js", "data/zhenti.js", "data/zaudio.js"],
@@ -1040,9 +1040,13 @@
   function renderZhentiList() {
     var list = (ZHENTI || []).slice().sort(function (a, b) { return b.id.localeCompare(a.id); });
     listPage("历年真题（" + list.length + " 套 · 2015–2026）", list, function (p, i) {
+      var rp = p.readingPassages || {};
+      var rq = (p.questions || []).filter(function (q) { return q.type === "reading"; })[0];
+      var fp = rq ? (rp[String(rq.qno)] || "").replace(/\s+/g, " ").trim() : "";
       return '<div class="list-item" data-idx="' + i + '"><div class="ic" style="background:#B71C1C1f;color:#B71C1C">卷</div>' +
-        '<div><h3>' + esc(p.source) + '</h3><p>' + p.questions.length + ' 题 · 含答案与详细解析</p></div>' +
-        '<div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
+        '<div><h3>' + esc(p.source) + '</h3><p>' + p.questions.length + ' 题 · 含答案与详细解析</p>' +
+        (fp ? '<p class="muted" style="font-size:12px;margin-top:2px">阅读首句：' + esc(fp.slice(0, 34)) + "…</p>" : "") +
+        '</div><div class="arrow" style="margin-left:auto;color:#c3c6d4">›</div></div>';
     }, renderZhentiDetail);
   }
 
